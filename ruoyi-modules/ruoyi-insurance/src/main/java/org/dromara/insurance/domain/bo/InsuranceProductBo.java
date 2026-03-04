@@ -1,0 +1,97 @@
+package org.dromara.insurance.domain.bo;
+
+import org.dromara.insurance.domain.InsuranceProduct;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
+import org.dromara.common.core.validate.AddGroup;
+import org.dromara.common.core.validate.EditGroup;
+import io.github.linpeilie.annotations.AutoMapper;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import jakarta.validation.constraints.*;
+import org.dromara.common.translation.annotation.Translation;
+import org.dromara.common.translation.constant.TransConstant;
+
+/**
+ * 产品配置业务对象 biz_insurance_product
+ *
+ * @author li.xiang
+ * @date 2026-03-02
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@AutoMapper(target = InsuranceProduct.class, reverseConvertGenerate = false)
+public class InsuranceProductBo extends BaseEntity {
+
+    /**
+     * id
+     */
+    @NotNull(message = "id不能为空", groups = { EditGroup.class })
+    private Long id;
+
+    /**
+     * 产品编码
+     */
+    @NotBlank(message = "产品编码不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String productCode;
+
+    /**
+     * 产品名称
+     */
+    @NotBlank(message = "产品名称不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String productName;
+
+    /**
+     * 保险公司编码
+     */
+    @NotBlank(message = "保险公司编码不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String companyCode;
+
+    /**
+     * 产品类型
+     */
+    @NotBlank(message = "产品类型不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String productType;
+
+    /**
+     * 产品模式
+     */
+    @NotNull(message = "产品模式不能为空", groups = { AddGroup.class, EditGroup.class })
+    private Long productMode;
+
+    /**
+     * 最低保费
+     */
+    @NotNull(message = "最低保费不能为空", groups = { AddGroup.class, EditGroup.class })
+    private Long minPremium;
+
+    /**
+     * 投保链接
+     */
+    @NotBlank(message = "投保链接不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String proposalUrl;
+
+    /**
+     * 产品图片
+     */
+    @NotBlank(message = "产品图片不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String imgUrl;
+
+    /**
+     * 产品说明
+     */
+    @NotBlank(message = "产品说明不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String description;
+
+    /**
+     * 产品状态
+     */
+    @NotNull(message = "产品状态不能为空", groups = { AddGroup.class, EditGroup.class })
+    private Long status;
+
+    /**
+     * 产品排序
+     */
+    private Long sort;
+
+
+}

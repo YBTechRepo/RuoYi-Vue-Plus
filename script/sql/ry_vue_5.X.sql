@@ -33,7 +33,7 @@ create table sys_social
     update_time        datetime                         comment '更新时间',
     del_flag           char(1)          default '0'     comment '删除标志（0代表存在 1代表删除）',
     PRIMARY KEY (id)
-) engine=innodb comment = '社会化关系表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '社会化关系表';
 
 
 -- ----------------------------
@@ -62,7 +62,7 @@ create table sys_tenant
     update_by         bigint(20)                    comment '更新者',
     update_time       datetime                      comment '更新时间',
     primary key (id)
-) engine=innodb comment = '租户表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '租户表';
 
 
 -- ----------------------------
@@ -89,7 +89,7 @@ create table sys_tenant_package (
     update_by               bigint(20)                 comment '更新者',
     update_time             datetime                   comment '更新时间',
     primary key (package_id)
-) engine=innodb comment = '租户套餐表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '租户套餐表';
 
 
 -- ----------------------------
@@ -114,7 +114,7 @@ create table sys_dept (
     update_by         bigint(20)      default null               comment '更新者',
     update_time       datetime                                   comment '更新时间',
     primary key (dept_id)
-) engine=innodb comment = '部门表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '部门表';
 
 -- ----------------------------
 -- 初始化-部门表数据
@@ -159,7 +159,7 @@ create table sys_user (
     update_time       datetime                                   comment '更新时间',
     remark            varchar(500)    default null               comment '备注',
     primary key (user_id)
-) engine=innodb comment = '用户信息表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '用户信息表';
 
 -- ----------------------------
 -- 初始化-用户信息表数据
@@ -188,7 +188,7 @@ create table sys_post
     update_time   datetime                                   comment '更新时间',
     remark        varchar(500)    default null               comment '备注',
     primary key (post_id)
-) engine=innodb comment = '岗位信息表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '岗位信息表';
 
 -- ----------------------------
 -- 初始化-岗位信息表数据
@@ -220,7 +220,7 @@ create table sys_role (
     update_time          datetime                                   comment '更新时间',
     remark               varchar(500)    default null               comment '备注',
     primary key (role_id)
-) engine=innodb comment = '角色信息表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '角色信息表';
 
 -- ----------------------------
 -- 初始化-角色信息表数据
@@ -254,7 +254,7 @@ create table sys_menu (
     update_time       datetime                                   comment '更新时间',
     remark            varchar(500)    default ''                 comment '备注',
     primary key (menu_id)
-) engine=innodb comment = '菜单权限表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '菜单权限表';
 
 -- ----------------------------
 -- 初始化-菜单信息表数据
@@ -414,7 +414,7 @@ create table sys_user_role (
     user_id   bigint(20) not null comment '用户ID',
     role_id   bigint(20) not null comment '角色ID',
     primary key(user_id, role_id)
-) engine=innodb comment = '用户和角色关联表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '用户和角色关联表';
 
 -- ----------------------------
 -- 初始化-用户和角色关联表数据
@@ -430,7 +430,7 @@ create table sys_role_menu (
     role_id   bigint(20) not null comment '角色ID',
     menu_id   bigint(20) not null comment '菜单ID',
     primary key(role_id, menu_id)
-) engine=innodb comment = '角色和菜单关联表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '角色和菜单关联表';
 
 -- ----------------------------
 -- 初始化-角色和菜单关联表数据
@@ -561,7 +561,7 @@ create table sys_role_dept (
     role_id   bigint(20) not null comment '角色ID',
     dept_id   bigint(20) not null comment '部门ID',
     primary key(role_id, dept_id)
-) engine=innodb comment = '角色和部门关联表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '角色和部门关联表';
 
 -- ----------------------------
 -- 9、用户与岗位关联表  用户1-N岗位
@@ -571,7 +571,7 @@ create table sys_user_post
     user_id   bigint(20) not null comment '用户ID',
     post_id   bigint(20) not null comment '岗位ID',
     primary key (user_id, post_id)
-) engine=innodb comment = '用户与岗位关联表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '用户与岗位关联表';
 
 -- ----------------------------
 -- 初始化-用户与岗位关联表数据
@@ -604,7 +604,7 @@ create table sys_oper_log (
     key idx_sys_oper_log_bt (business_type),
     key idx_sys_oper_log_s  (status),
     key idx_sys_oper_log_ot (oper_time)
-) engine=innodb comment = '操作日志记录';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '操作日志记录';
 
 
 -- ----------------------------
@@ -624,7 +624,7 @@ create table sys_dict_type
     remark           varchar(500)    default null               comment '备注',
     primary key (dict_id),
     unique (tenant_id, dict_type)
-) engine=innodb comment = '字典类型表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '字典类型表';
 
 insert into sys_dict_type values(1, '000000', '用户性别', 'sys_user_sex',        103, 1, sysdate(), null, null, '用户性别列表');
 insert into sys_dict_type values(2, '000000', '菜单状态', 'sys_show_hide',       103, 1, sysdate(), null, null, '菜单状态列表');
@@ -659,7 +659,7 @@ create table sys_dict_data
     update_time      datetime                                   comment '更新时间',
     remark           varchar(500)    default null               comment '备注',
     primary key (dict_code)
-) engine=innodb comment = '字典数据表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '字典数据表';
 
 insert into sys_dict_data values(1, '000000', 1,  '男',       '0',       'sys_user_sex',        '',   '',        'Y', 103, 1, sysdate(), null, null, '性别男');
 insert into sys_dict_data values(2, '000000', 2,  '女',       '1',       'sys_user_sex',        '',   '',        'N', 103, 1, sysdate(), null, null, '性别女');
@@ -714,7 +714,7 @@ create table sys_config (
     update_time       datetime                                   comment '更新时间',
     remark            varchar(500)    default null               comment '备注',
     primary key (config_id)
-) engine=innodb comment = '参数配置表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '参数配置表';
 
 insert into sys_config values(1, '000000', '主框架页-默认皮肤样式名称',     'sys.index.skinName',            'skin-blue',     'Y', 103, 1, sysdate(), null, null, '蓝色 skin-blue、绿色 skin-green、紫色 skin-purple、红色 skin-red、黄色 skin-yellow' );
 insert into sys_config values(2, '000000', '用户管理-账号初始密码',        'sys.user.initPassword',         '123456',        'Y', 103, 1, sysdate(), null, null, '初始化密码 123456' );
@@ -742,7 +742,7 @@ create table sys_logininfor (
     primary key (info_id),
     key idx_sys_logininfor_s  (status),
     key idx_sys_logininfor_lt (login_time)
-) engine=innodb comment = '系统访问记录';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '系统访问记录';
 
 
 -- ----------------------------
@@ -762,7 +762,7 @@ create table sys_notice (
     update_time       datetime                                   comment '更新时间',
     remark            varchar(255)    default null               comment '备注',
     primary key (notice_id)
-) engine=innodb comment = '通知公告表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '通知公告表';
 
 -- ----------------------------
 -- 初始化-公告信息表数据
@@ -798,7 +798,7 @@ create table gen_table (
     update_time       datetime                                   comment '更新时间',
     remark            varchar(500)    default null               comment '备注',
     primary key (table_id)
-) engine=innodb comment = '代码生成业务表';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '代码生成业务表';
 
 
 -- ----------------------------
@@ -829,7 +829,7 @@ create table gen_table_column (
     update_by         bigint(20)      default null               comment '更新者',
     update_time       datetime                                   comment '更新时间',
     primary key (column_id)
-) engine=innodb comment = '代码生成业务表字段';
+) engine=innodb DEFAULT charset=utf8mb4 comment = '代码生成业务表字段';
 
 -- ----------------------------
 -- OSS对象存储表
@@ -849,7 +849,7 @@ create table sys_oss (
     update_by       bigint(20)            default null      comment '更新人',
     service         varchar(20)  not null default 'minio'   comment '服务商',
     primary key (oss_id)
-) engine=innodb comment ='OSS对象存储表';
+) engine=innodb DEFAULT charset=utf8mb4 comment ='OSS对象存储表';
 
 -- ----------------------------
 -- OSS对象存储动态配置表
@@ -876,7 +876,7 @@ create table sys_oss_config (
     update_time     datetime                default null    comment '更新时间',
     remark          varchar(500)            default null    comment '备注',
     primary key (oss_config_id)
-) engine=innodb comment='对象存储配置表';
+) engine=innodb DEFAULT charset=utf8mb4 comment='对象存储配置表';
 
 insert into sys_oss_config values (1, '000000', 'minio',  'ruoyi',            'ruoyi123',        'ruoyi',             '', '127.0.0.1:9000',                '','N', '',             '1' ,'0', '', 103, 1, sysdate(), 1, sysdate(), null);
 insert into sys_oss_config values (2, '000000', 'qiniu',  'XXXXXXXXXXXXXXX',  'XXXXXXXXXXXXXXX', 'ruoyi',             '', 's3-cn-north-1.qiniucs.com',     '','N', '',             '1' ,'1', '', 103, 1, sysdate(), 1, sysdate(), null);
@@ -904,7 +904,7 @@ create table sys_client (
     update_by           bigint(20)    default null        comment '更新者',
     update_time         datetime      default null        comment '更新时间',
     primary key (id)
-) engine=innodb comment='系统授权表';
+) engine=innodb DEFAULT charset=utf8mb4 comment='系统授权表';
 
 insert into sys_client values (1, 'e5cd7e4891bf95d1d19206ce24a7b32e', 'pc', 'pc123', 'password,social', 'pc', 1800, 604800, 0, 0, 103, 1, sysdate(), 1, sysdate());
 insert into sys_client values (2, '428a8310cd442757ae699df5d894f051', 'app', 'app123', 'password,sms,social', 'android', 1800, 604800, 0, 0, 103, 1, sysdate(), 1, sysdate());

@@ -43,7 +43,7 @@ logging:
 user:
   password:
     # 密码最大错误次数
-    maxRetryCount: 5
+    maxRetryCount: 99
     # 密码锁定时间（默认10分钟）
     lockTime: 10
 
@@ -54,7 +54,7 @@ spring:
   threads:
     # 开启虚拟线程 仅jdk21可用
     virtual:
-      enabled: false
+      enabled: true
   task:
     execution:
       # 从 springboot 3.5 开始 spring自带线程池
@@ -169,7 +169,7 @@ mybatis-encryptor:
 # api接口加密
 api-decrypt:
   # 是否开启全局接口加密
-  enabled: true
+  enabled: false
   # AES 加密头标识
   headerFlag: encrypt-key
   # 响应加密公钥 非对称算法的公私钥 如：SM2，RSA 使用者请自行更换
@@ -182,7 +182,7 @@ api-decrypt:
 springdoc:
   api-docs:
     # 是否开启接口文档
-    enabled: true
+    enabled: false
   info:
     # 标题
     title: '标题：RuoYi-Vue-Plus多租户管理系统_接口文档'
@@ -252,7 +252,7 @@ websocket:
 --- # warm-flow工作流配置
 warm-flow:
   # 是否开启工作流，默认true
-  enabled: true
+  enabled: false
   # 是否开启设计器ui
   ui: true
   # 是否显示流程图顶部文字
