@@ -24,7 +24,7 @@ import java.util.Collection;
  * 承保保单Service业务层处理
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-09
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -74,19 +74,17 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<InsurancePolicy> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(InsurancePolicy::getId);
-        lqw.eq(bo.getProductId() != null, InsurancePolicy::getProductId, bo.getProductId());
         lqw.eq(StringUtils.isNotBlank(bo.getProductCode()), InsurancePolicy::getProductCode, bo.getProductCode());
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), InsurancePolicy::getProductName, bo.getProductName());
         lqw.eq(StringUtils.isNotBlank(bo.getPolicyNo()), InsurancePolicy::getPolicyNo, bo.getPolicyNo());
         lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), InsurancePolicy::getOrderNo, bo.getOrderNo());
         lqw.like(StringUtils.isNotBlank(bo.getAgentName()), InsurancePolicy::getAgentName, bo.getAgentName());
+        lqw.eq(bo.getPremium() != null, InsurancePolicy::getPremium, bo.getPremium());
+        lqw.eq(bo.getAmt() != null, InsurancePolicy::getAmt, bo.getAmt());
         lqw.eq(bo.getCommissionStatus() != null, InsurancePolicy::getCommissionStatus, bo.getCommissionStatus());
         lqw.eq(bo.getStatus() != null, InsurancePolicy::getStatus, bo.getStatus());
         lqw.eq(bo.getAppntDate() != null, InsurancePolicy::getAppntDate, bo.getAppntDate());
-        lqw.eq(bo.getAccecptDate() != null, InsurancePolicy::getAccecptDate, bo.getAccecptDate());
-        lqw.eq(bo.getPolicyInvalidDate() != null, InsurancePolicy::getPolicyInvalidDate, bo.getPolicyInvalidDate());
-        lqw.eq(bo.getPolicyStartDate() != null, InsurancePolicy::getPolicyStartDate, bo.getPolicyStartDate());
-        lqw.eq(bo.getPolicyEndDate() != null, InsurancePolicy::getPolicyEndDate, bo.getPolicyEndDate());
+        lqw.like(StringUtils.isNotBlank(bo.getApplicantName()), InsurancePolicy::getApplicantName, bo.getApplicantName());
         return lqw;
     }
 
@@ -140,5 +138,13 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
             //TODO 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteByIds(ids) > 0;
+    }
+
+    @Override
+    public InsurancePolicy queryByPolicyNoAndTenantId(String policyNo, String tenantId) {
+        LambdaQueryWrapper<InsurancePolicy> lqw = Wrappers.lambdaQuery();
+        lqw.eq(InsurancePolicy::getPolicyNo, policyNo);
+        lqw.eq(InsurancePolicy::getTenantId, tenantId);
+        return baseMapper.selectOne(lqw);
     }
 }

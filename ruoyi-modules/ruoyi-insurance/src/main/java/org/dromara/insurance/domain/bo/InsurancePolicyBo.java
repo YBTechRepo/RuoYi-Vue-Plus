@@ -16,7 +16,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
  * 承保保单业务对象 biz_insurance_policy
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-11
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -32,13 +32,11 @@ public class InsurancePolicyBo extends BaseEntity {
     /**
      * 产品id
      */
-    @NotNull(message = "产品id不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long productId;
 
     /**
      * 产品编码
      */
-    @NotBlank(message = "产品编码不能为空", groups = { AddGroup.class, EditGroup.class })
     private String productCode;
 
     /**
@@ -116,7 +114,6 @@ public class InsurancePolicyBo extends BaseEntity {
     /**
      * 保单失效时间
      */
-    @NotNull(message = "保单失效时间不能为空", groups = { AddGroup.class, EditGroup.class })
     private Date policyInvalidDate;
 
     /**
@@ -168,6 +165,12 @@ public class InsurancePolicyBo extends BaseEntity {
     private String relationshipToInsured;
 
     /**
+     * 被保人姓名
+     */
+    @NotBlank(message = "被保人姓名不能为空", groups = { AddGroup.class, EditGroup.class })
+    private String insuredName;
+
+    /**
      * 被保人性别
      */
     @NotBlank(message = "被保人性别不能为空", groups = { AddGroup.class, EditGroup.class })
@@ -190,6 +193,16 @@ public class InsurancePolicyBo extends BaseEntity {
      */
     @NotBlank(message = "被保人手机号不能为空", groups = { AddGroup.class, EditGroup.class })
     private String insuredMobile;
+
+    /**
+     * 删除标识
+     */
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    private Integer version;
 
 
 }

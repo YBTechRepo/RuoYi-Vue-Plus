@@ -1,6 +1,6 @@
 package org.dromara.insurance.domain.bo;
 
-import org.dromara.insurance.domain.InsuranceProduct;
+import org.dromara.insurance.domain.InsuranceProductConfig;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 import org.dromara.common.core.validate.AddGroup;
 import org.dromara.common.core.validate.EditGroup;
@@ -8,6 +8,7 @@ import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
+import java.math.BigDecimal;
 import org.dromara.common.translation.annotation.Translation;
 import org.dromara.common.translation.constant.TransConstant;
 
@@ -15,12 +16,12 @@ import org.dromara.common.translation.constant.TransConstant;
  * 产品配置业务对象 biz_insurance_product
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-06
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@AutoMapper(target = InsuranceProduct.class, reverseConvertGenerate = false)
-public class InsuranceProductBo extends BaseEntity {
+@AutoMapper(target = InsuranceProductConfig.class, reverseConvertGenerate = false)
+public class InsuranceProductConfigBo extends BaseEntity {
 
     /**
      * id
@@ -41,9 +42,9 @@ public class InsuranceProductBo extends BaseEntity {
     private String productName;
 
     /**
-     * 保险公司编码
+     * 保险公司
      */
-    @NotBlank(message = "保险公司编码不能为空", groups = { AddGroup.class, EditGroup.class })
+    @NotBlank(message = "保险公司不能为空", groups = { AddGroup.class, EditGroup.class })
     private String companyCode;
 
     /**
@@ -56,13 +57,13 @@ public class InsuranceProductBo extends BaseEntity {
      * 产品模式
      */
     @NotNull(message = "产品模式不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long productMode;
+    private Integer productMode;
 
     /**
      * 最低保费
      */
     @NotNull(message = "最低保费不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long minPremium;
+    private BigDecimal minPremium;
 
     /**
      * 投保链接
@@ -86,12 +87,22 @@ public class InsuranceProductBo extends BaseEntity {
      * 产品状态
      */
     @NotNull(message = "产品状态不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long status;
+    private Integer status;
 
     /**
      * 产品排序
      */
-    private Long sort;
+    private Integer sort;
+
+    /**
+     * 删除标识
+     */
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    private Integer version;
 
 
 }

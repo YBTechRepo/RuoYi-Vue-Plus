@@ -1,5 +1,6 @@
 package org.dromara.insurance.service;
 
+import org.dromara.insurance.domain.InsurancePolicy;
 import org.dromara.insurance.domain.vo.InsurancePolicyVo;
 import org.dromara.insurance.domain.bo.InsurancePolicyBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -12,7 +13,7 @@ import java.util.List;
  * 承保保单Service接口
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-09
  */
 public interface IInsurancePolicyService {
 
@@ -65,4 +66,14 @@ public interface IInsurancePolicyService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    /**
+     * 根据保单号和租户ID查询承保保单
+     *
+     * @param policyNo 保单号
+     * @param tenantId 租户ID
+     * @return 承保保单
+     */
+    InsurancePolicy queryByPolicyNoAndTenantId(String policyNo, String tenantId);
+
 }

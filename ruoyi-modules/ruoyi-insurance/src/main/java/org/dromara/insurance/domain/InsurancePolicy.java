@@ -14,7 +14,7 @@ import java.io.Serial;
  * 承保保单对象 biz_insurance_policy
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-11
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -146,6 +146,11 @@ public class InsurancePolicy extends TenantEntity {
     private String relationshipToInsured;
 
     /**
+     * 被保人姓名
+     */
+    private String insuredName;
+
+    /**
      * 被保人性别
      */
     private String insuredSex;
@@ -168,7 +173,14 @@ public class InsurancePolicy extends TenantEntity {
     /**
      * 删除标识
      */
-    private Integer deletedFlag;
+    @TableLogic
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    @Version
+    private Integer version;
 
 
 }

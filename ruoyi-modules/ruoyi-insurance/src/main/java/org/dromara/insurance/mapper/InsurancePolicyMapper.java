@@ -8,7 +8,7 @@ import org.dromara.common.mybatis.core.mapper.BaseMapperPlus;
  * 承保保单Mapper接口
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-11
  */
 public interface InsurancePolicyMapper extends BaseMapperPlus<InsurancePolicy, InsurancePolicyVo> {
 

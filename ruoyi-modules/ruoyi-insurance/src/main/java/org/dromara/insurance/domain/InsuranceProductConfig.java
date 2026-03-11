@@ -4,6 +4,7 @@ import org.dromara.common.tenant.core.TenantEntity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import java.math.BigDecimal;
 import org.dromara.common.translation.annotation.Translation;
 import org.dromara.common.translation.constant.TransConstant;
 
@@ -13,12 +14,12 @@ import java.io.Serial;
  * 产品配置对象 biz_insurance_product
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-06
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("biz_insurance_product")
-public class InsuranceProduct extends TenantEntity {
+public class InsuranceProductConfig extends TenantEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -40,7 +41,7 @@ public class InsuranceProduct extends TenantEntity {
     private String productName;
 
     /**
-     * 保险公司编码
+     * 保险公司
      */
     private String companyCode;
 
@@ -52,12 +53,12 @@ public class InsuranceProduct extends TenantEntity {
     /**
      * 产品模式
      */
-    private Long productMode;
+    private Integer productMode;
 
     /**
      * 最低保费
      */
-    private Long minPremium;
+    private BigDecimal minPremium;
 
     /**
      * 投保链接
@@ -77,17 +78,24 @@ public class InsuranceProduct extends TenantEntity {
     /**
      * 产品状态
      */
-    private Long status;
+    private Integer status;
 
     /**
      * 产品排序
      */
-    private Long sort;
+    private Integer sort;
 
     /**
      * 删除标识
      */
-    private Long deletedFlag;
+    @TableLogic
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    @Version
+    private Integer version;
 
 
 }

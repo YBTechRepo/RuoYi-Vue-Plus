@@ -21,7 +21,7 @@ import java.util.Date;
  * 承保保单视图对象 biz_insurance_policy
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-11
  */
 @Data
 @ExcelIgnoreUnannotated
@@ -150,7 +150,8 @@ public class InsurancePolicyVo implements Serializable {
     /**
      * 投保人性别
      */
-    @ExcelProperty(value = "投保人性别")
+    @ExcelProperty(value = "投保人性别", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_sex")
     private String applicantSex;
 
     /**
@@ -162,7 +163,8 @@ public class InsurancePolicyVo implements Serializable {
     /**
      * 投保人证件类型
      */
-    @ExcelProperty(value = "投保人证件类型")
+    @ExcelProperty(value = "投保人证件类型", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_id_type")
     private String applicantIdType;
 
     /**
@@ -174,13 +176,21 @@ public class InsurancePolicyVo implements Serializable {
     /**
      * 被保人与投保人关系
      */
-    @ExcelProperty(value = "被保人与投保人关系")
+    @ExcelProperty(value = "被保人与投保人关系", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_relationship_to_insured")
     private String relationshipToInsured;
+
+    /**
+     * 被保人姓名
+     */
+    @ExcelProperty(value = "被保人姓名")
+    private String insuredName;
 
     /**
      * 被保人性别
      */
-    @ExcelProperty(value = "被保人性别")
+    @ExcelProperty(value = "被保人性别", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_sex")
     private String insuredSex;
 
     /**
@@ -192,7 +202,8 @@ public class InsurancePolicyVo implements Serializable {
     /**
      * 被保人证件类型
      */
-    @ExcelProperty(value = "被保人证件类型")
+    @ExcelProperty(value = "被保人证件类型", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_id_type")
     private String insuredIdType;
 
     /**
@@ -200,4 +211,18 @@ public class InsurancePolicyVo implements Serializable {
      */
     @ExcelProperty(value = "被保人手机号")
     private String insuredMobile;
+
+    /**
+     * 删除标识
+     */
+    @ExcelProperty(value = "删除标识")
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    @ExcelProperty(value = "乐观锁版本")
+    private Integer version;
+
+
 }

@@ -1,8 +1,9 @@
 package org.dromara.insurance.domain.vo;
 
+import java.math.BigDecimal;
 import org.dromara.common.translation.annotation.Translation;
 import org.dromara.common.translation.constant.TransConstant;
-import org.dromara.insurance.domain.InsuranceProduct;
+import org.dromara.insurance.domain.InsuranceProductConfig;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import org.dromara.common.excel.annotation.ExcelDictFormat;
@@ -20,12 +21,12 @@ import java.util.Date;
  * 产品配置视图对象 biz_insurance_product
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-06
  */
 @Data
 @ExcelIgnoreUnannotated
-@AutoMapper(target = InsuranceProduct.class)
-public class InsuranceProductVo implements Serializable {
+@AutoMapper(target = InsuranceProductConfig.class)
+public class InsuranceProductConfigVo implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -49,9 +50,9 @@ public class InsuranceProductVo implements Serializable {
     private String productName;
 
     /**
-     * 保险公司编码
+     * 保险公司
      */
-    @ExcelProperty(value = "保险公司编码", converter = ExcelDictConvert.class)
+    @ExcelProperty(value = "保险公司", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_company")
     private String companyCode;
 
@@ -67,13 +68,13 @@ public class InsuranceProductVo implements Serializable {
      */
     @ExcelProperty(value = "产品模式", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_product_mode")
-    private Long productMode;
+    private Integer productMode;
 
     /**
      * 最低保费
      */
     @ExcelProperty(value = "最低保费")
-    private Long minPremium;
+    private BigDecimal minPremium;
 
     /**
      * 投保链接
@@ -103,13 +104,13 @@ public class InsuranceProductVo implements Serializable {
      */
     @ExcelProperty(value = "产品状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_product_status")
-    private Long status;
+    private Integer status;
 
     /**
      * 产品排序
      */
     @ExcelProperty(value = "产品排序")
-    private Long sort;
+    private Integer sort;
 
     /**
      * 创建时间
@@ -118,10 +119,16 @@ public class InsuranceProductVo implements Serializable {
     private Date createTime;
 
     /**
-     * 更新时间
+     * 删除标识
      */
-    @ExcelProperty(value = "更新时间")
-    private Date updateTime;
+    @ExcelProperty(value = "删除标识")
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    @ExcelProperty(value = "乐观锁版本")
+    private Integer version;
 
 
 }

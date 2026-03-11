@@ -17,43 +17,43 @@ import org.dromara.common.core.validate.AddGroup;
 import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.excel.utils.ExcelUtil;
-import org.dromara.insurance.domain.vo.InsuranceProductVo;
-import org.dromara.insurance.domain.bo.InsuranceProductBo;
-import org.dromara.insurance.service.IInsuranceProductService;
+import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
+import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
+import org.dromara.insurance.service.IInsuranceProductConfigService;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 
 /**
  * 产品配置
  *
  * @author li.xiang
- * @date 2026-03-02
+ * @date 2026-03-06
  */
 @Validated
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/insurance/InsuranceProduct")
-public class InsuranceProductController extends BaseController {
+@RequestMapping("/insurance/InsuranceProductConfig")
+public class InsuranceProductConfigController extends BaseController {
 
-    private final IInsuranceProductService insuranceProductService;
+    private final IInsuranceProductConfigService insuranceProductConfigService;
 
     /**
      * 查询产品配置列表
      */
-    @SaCheckPermission("insurance:InsuranceProduct:list")
+    @SaCheckPermission("insurance:InsuranceProductConfig:list")
     @GetMapping("/list")
-    public TableDataInfo<InsuranceProductVo> list(InsuranceProductBo bo, PageQuery pageQuery) {
-        return insuranceProductService.queryPageList(bo, pageQuery);
+    public TableDataInfo<InsuranceProductConfigVo> list(InsuranceProductConfigBo bo, PageQuery pageQuery) {
+        return insuranceProductConfigService.queryPageList(bo, pageQuery);
     }
 
     /**
      * 导出产品配置列表
      */
-    @SaCheckPermission("insurance:InsuranceProduct:export")
+    @SaCheckPermission("insurance:InsuranceProductConfig:export")
     @Log(title = "产品配置", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
-    public void export(InsuranceProductBo bo, HttpServletResponse response) {
-        List<InsuranceProductVo> list = insuranceProductService.queryList(bo);
-        ExcelUtil.exportExcel(list, "产品配置", InsuranceProductVo.class, response);
+    public void export(InsuranceProductConfigBo bo, HttpServletResponse response) {
+        List<InsuranceProductConfigVo> list = insuranceProductConfigService.queryList(bo);
+        ExcelUtil.exportExcel(list, "产品配置", InsuranceProductConfigVo.class, response);
     }
 
     /**
@@ -61,33 +61,33 @@ public class InsuranceProductController extends BaseController {
      *
      * @param id 主键
      */
-    @SaCheckPermission("insurance:InsuranceProduct:query")
+    @SaCheckPermission("insurance:InsuranceProductConfig:query")
     @GetMapping("/{id}")
-    public R<InsuranceProductVo> getInfo(@NotNull(message = "主键不能为空")
+    public R<InsuranceProductConfigVo> getInfo(@NotNull(message = "主键不能为空")
                                      @PathVariable Long id) {
-        return R.ok(insuranceProductService.queryById(id));
+        return R.ok(insuranceProductConfigService.queryById(id));
     }
 
     /**
      * 新增产品配置
      */
-    @SaCheckPermission("insurance:InsuranceProduct:add")
+    @SaCheckPermission("insurance:InsuranceProductConfig:add")
     @Log(title = "产品配置", businessType = BusinessType.INSERT)
     @RepeatSubmit()
     @PostMapping()
-    public R<Void> add(@Validated(AddGroup.class) @RequestBody InsuranceProductBo bo) {
-        return toAjax(insuranceProductService.insertByBo(bo));
+    public R<Void> add(@Validated(AddGroup.class) @RequestBody InsuranceProductConfigBo bo) {
+        return toAjax(insuranceProductConfigService.insertByBo(bo));
     }
 
     /**
      * 修改产品配置
      */
-    @SaCheckPermission("insurance:InsuranceProduct:edit")
+    @SaCheckPermission("insurance:InsuranceProductConfig:edit")
     @Log(title = "产品配置", businessType = BusinessType.UPDATE)
     @RepeatSubmit()
     @PutMapping()
-    public R<Void> edit(@Validated(EditGroup.class) @RequestBody InsuranceProductBo bo) {
-        return toAjax(insuranceProductService.updateByBo(bo));
+    public R<Void> edit(@Validated(EditGroup.class) @RequestBody InsuranceProductConfigBo bo) {
+        return toAjax(insuranceProductConfigService.updateByBo(bo));
     }
 
     /**
@@ -95,11 +95,11 @@ public class InsuranceProductController extends BaseController {
      *
      * @param ids 主键串
      */
-    @SaCheckPermission("insurance:InsuranceProduct:remove")
+    @SaCheckPermission("insurance:InsuranceProductConfig:remove")
     @Log(title = "产品配置", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ids}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
-        return toAjax(insuranceProductService.deleteWithValidByIds(List.of(ids), true));
+        return toAjax(insuranceProductConfigService.deleteWithValidByIds(List.of(ids), true));
     }
 }

@@ -12,7 +12,7 @@ import java.util.List;
  * 投保记录Service接口
  *
  * @author li.xiang
- * @date 2026-03-04
+ * @date 2026-03-09
  */
 public interface IInsuranceApplyRecordService {
 

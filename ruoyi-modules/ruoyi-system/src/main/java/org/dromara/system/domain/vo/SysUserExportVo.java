@@ -93,4 +93,12 @@ public class SysUserExportVo implements Serializable {
     @ExcelProperty(value = "部门负责人")
     private String leaderName;
 
+    @ExcelProperty(value = "身份证号")
+    private String idNo;
+
+    @ExcelProperty(value = "推荐人")
+    private String referrerName;
+
+    @ExcelProperty(value = "推荐人ID")
+    private Long referrerId;
 }

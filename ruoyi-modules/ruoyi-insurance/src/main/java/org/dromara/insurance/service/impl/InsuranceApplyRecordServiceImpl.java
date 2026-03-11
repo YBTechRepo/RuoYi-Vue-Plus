@@ -24,7 +24,7 @@ import java.util.Collection;
  * 投保记录Service业务层处理
  *
  * @author li.xiang
- * @date 2026-03-04
+ * @date 2026-03-09
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -80,10 +80,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         lqw.like(StringUtils.isNotBlank(bo.getAgentName()), InsuranceApplyRecord::getAgentName, bo.getAgentName());
         lqw.like(StringUtils.isNotBlank(bo.getCustomerName()), InsuranceApplyRecord::getCustomerName, bo.getCustomerName());
         lqw.eq(StringUtils.isNotBlank(bo.getCustomerMobile()), InsuranceApplyRecord::getCustomerMobile, bo.getCustomerMobile());
-        lqw.eq(bo.getPremium() != null, InsuranceApplyRecord::getPremium, bo.getPremium());
         lqw.eq(bo.getStatus() != null, InsuranceApplyRecord::getStatus, bo.getStatus());
         lqw.eq(bo.getCommissionStatus() != null, InsuranceApplyRecord::getCommissionStatus, bo.getCommissionStatus());
-        lqw.eq(bo.getCreateTime() != null, InsuranceApplyRecord::getCreateTime, bo.getCreateTime());
         return lqw;
     }
 

@@ -1,6 +1,5 @@
 package org.dromara.insurance.domain.vo;
 
-import java.math.BigDecimal;
 import org.dromara.insurance.domain.InsuranceApplyRecord;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -19,7 +18,7 @@ import java.util.Date;
  * 投保记录视图对象 biz_insurance_apply_record
  *
  * @author li.xiang
- * @date 2026-03-04
+ * @date 2026-03-09
  */
 @Data
 @ExcelIgnoreUnannotated
@@ -40,6 +39,12 @@ public class InsuranceApplyRecordVo implements Serializable {
      */
     @ExcelProperty(value = "订单号")
     private String orderNo;
+
+    /**
+     * 产品ID
+     */
+    @ExcelProperty(value = "产品ID")
+    private Long productId;
 
     /**
      * 产品编码
@@ -87,27 +92,39 @@ public class InsuranceApplyRecordVo implements Serializable {
      * 登记保费
      */
     @ExcelProperty(value = "登记保费")
-    private BigDecimal premium;
+    private Long premium;
 
     /**
      * 订单状态
      */
     @ExcelProperty(value = "订单状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_apply_status")
-    private Integer status;
+    private Long status;
 
     /**
      * 结算状态
      */
     @ExcelProperty(value = "结算状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_commission_status")
-    private Integer commissionStatus;
+    private Long commissionStatus;
 
     /**
      * 创建时间
      */
     @ExcelProperty(value = "创建时间")
     private Date createTime;
+
+    /**
+     * 删除标识
+     */
+    @ExcelProperty(value = "删除标识")
+    private String delFlag;
+
+    /**
+     * 乐观锁版本
+     */
+    @ExcelProperty(value = "乐观锁版本")
+    private Long version;
 
 
 }
