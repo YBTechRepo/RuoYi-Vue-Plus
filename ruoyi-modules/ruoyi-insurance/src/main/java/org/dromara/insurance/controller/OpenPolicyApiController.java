@@ -13,7 +13,6 @@ import org.dromara.insurance.domain.dto.PolicyCallbackDto;
 import org.dromara.insurance.domain.dto.PolicyCallbackReqDto;
 import org.dromara.insurance.service.IOpenPolicyFacadeService;
 import org.dromara.insurance.utils.RSAUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -50,19 +49,9 @@ public class OpenPolicyApiController {
             return R.fail("签名为空");
         }
 
-        // 解密
-        String decryptContent;
-        try {
-            decryptContent = RSAUtil.decryptByPrivateKey(content, openApiProperties.getPrivateKey(), "UTF-8");
-        } catch (Exception e) {
-            log.error("解密异常，content: {}", content.substring(0, Math.min(50, content.length())), e);
-            return R.fail("解密异常");
-        }
-
         // 验证签名
         try {
-            String encryptContent = RSAUtil.encryptByPublicKey(decryptContent, openApiProperties.getPublicKey(), "UTF-8");
-            String calculatedSign = RSAUtil.generateSign(encryptContent, openApiProperties.getAppCode());
+           String calculatedSign = RSAUtil.generateSign(content, openApiProperties.getAppCode());
             if (!calculatedSign.equals(sign)) {
                 log.error("签名验证失败，期望：{}, 实际：{}", calculatedSign, sign);
                 return R.fail("签名验证失败");
@@ -72,10 +61,20 @@ public class OpenPolicyApiController {
             return R.fail("签名验证异常");
         }
 
+        // 解密
+        String decryptContent;
+        try {
+            decryptContent = RSAUtil.decryptByPrivateKey(content, openApiProperties.getPrivateKey(), "UTF-8");
+        } catch (Exception e) {
+            log.error("解密异常，content: {}", content.substring(0, Math.min(50, content.length())), e);
+            return R.fail("解密异常");
+        }
+
         // decryptContent 转换为 PolicyCallbackDto
         PolicyCallbackDto policyCallbackDto;
         try {
             policyCallbackDto = objectMapper.readValue(decryptContent, PolicyCallbackDto.class);
+            log.info("policyCallbackDto：{}", policyCallbackDto);
         } catch (JsonProcessingException e) {
             log.error("PolicyCallbackDto 对象转换异常，decryptContent: {}", decryptContent, e);
             return R.fail("数据格式错误");
@@ -100,7 +99,7 @@ public class OpenPolicyApiController {
         }
 
 
-        log.info("【回调成功】保单已入库，单号: {}", policyCallbackDto.getPolicyDto().getPolicyNo());
+        log.info("【回调成功】保单已入库，单号: {}", policyCallbackDto.getPolicy().getPolicyNo());
         return R.ok();
     }
 

@@ -6,7 +6,7 @@ import java.util.List;
 
 @Data
 public class PolicyCallbackDto {
-    private PolicyDto policyDto;
-    private AppntDto appntDto;
-    private List<InsuredDto> insuredDtoList;
+    private PolicyDto policy;
+    private AppntDto appnt;
+    private List<InsuredDto> insureds;
 }

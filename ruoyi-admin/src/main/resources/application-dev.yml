@@ -268,3 +268,9 @@ justauth:
       client-id: 10**********6
       client-secret: 1f7d08**********5b7**********29e
       redirect-uri: ${justauth.address}/social-callback?source=gitea
+
+insurance:
+  openapi:
+    appCode: f9d6d9c8d97a467e
+    publicKey: MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCU+mHYt2evAYX53Z1D/KbUbD+y4D9J5ield+3EnkxvrY31LDX4oyk4qAnpyGX6xLDsoRZ9b8w5CVVrmrnqATGb6/QaFZLm/vPJXhpYk1Iwbm71W9q9KImG3XCHAeK+YFZr2GW284Zpr64O/5PTCc7Z+vAe0Q0dB3lcK3PML6GHlwIDAQAB
+    privateKey: MIICdQIBADANBgkqhkiG9w0BAQEFAASCAl8wggJbAgEAAoGBAJT6Ydi3Z68BhfndnUP8ptRsP7LgP0nmJ6V37cSeTG+tjfUsNfijKTioCenIZfrEsOyhFn1vzDkJVWuaueoBMZvr9BoVkub+88leGliTUjBubvVb2r0oiYbdcIcB4r5gVmvYZbbzhmmvrg7/k9MJztn68B7RDR0HeVwrc8wvoYeXAgMBAAECgYAK1Em6vKSk51a+hOb/jN6KdqHv76mtRmjF+CB7y3v7HdUOjnVDF4bE3D/FBpdIvsJ6BcDb3Mp640+AkzTSqndZTBGqOAQxUdkhgW2pXFuIin7jUrQV7bSLkpZb34K7nGeQS9lCG6VMv2zWESL3xrbt7drnVFoQvNF5jAn+vmKTjQJBAM0vHvWKhM0/nwPbu0jL6NhkljUe95PRjF4vgYWcRemYeywnhfR+3EDpmBEN2pfmuWfvvCJmVuMNNGhPfyK/YTUCQQC5374tVQhkKRnG1WyDN8ettzegulR1aaFkqbnFXmHwwRgvcgjGA3wiHJ2wTH9gFkvP7sQKc5QwVH2/M1kw0QsbAkALGUZqb8C5PXzDf6pEyMrikaZSX0dzFn2qRpWR/Z8GgLoA7G5hiE8vr7MLER3G47MZvS0HC1Qd2gQAtHQjFAkVAkAa+7o2BoQjVjwhu1X3bp+UPmba9HHSYbVGUcVgO6VoN//0008mv9bDdPgHYfOT1WjIFNds1P6MTZe7rA6koZRFAkBncZwn1vD4SB/5P8UhTHoc1D3uQMb36WyCm6JI460DEFCjc+nr4BVLuo7mJ0GipOk1v3sxoSAy5t1KAa/DNQYG

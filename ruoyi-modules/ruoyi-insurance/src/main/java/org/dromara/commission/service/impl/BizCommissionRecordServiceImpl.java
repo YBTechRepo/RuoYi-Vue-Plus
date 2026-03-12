@@ -178,10 +178,10 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         boolean useSpecialCommission = false;
 
         if (bizCommissionProduct != null) {
-            if(bizCommissionProduct.getStatus() == 0){
+            if (bizCommissionProduct.getStatus() == 0) {
                 // 检查特殊佣金是否在有效期内
-                if(now.after(bizCommissionProduct.getEffectiveStart()) &&
-                    now.before(bizCommissionProduct.getEffectiveEnd())){
+                if (now.after(bizCommissionProduct.getEffectiveStart()) &&
+                    now.before(bizCommissionProduct.getEffectiveEnd())) {
                     // 有特殊佣金费率且在有效期内，使用特殊佣金费率
                     useSpecialCommission = true;
                     // 业务员佣金
@@ -231,7 +231,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         }
     }
 
-    private void insertCommissionRecord(InsertCommission insertCommissionParam){
+    private void insertCommissionRecord(InsertCommission insertCommissionParam) {
         BizCommissionRecordBo bizCommissionRecordBo = new BizCommissionRecordBo();
 
         Long salesUserId = insertCommissionParam.getCalcCommission().getSalesUserId();
@@ -275,9 +275,12 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             bizCommissionRecordBo.setTeamAmount(tAmount);
             bizCommissionRecordBo.setProjectAmount(pAmount);
         }
+        bizCommissionRecordBo.setCreateBy(insertCommissionParam.getCalcCommission().getCreateById());
+        bizCommissionRecordBo.setUpdateBy(insertCommissionParam.getCalcCommission().getCreateById());
+        bizCommissionRecordBo.setCreateDept(insertCommissionParam.getCalcCommission().getCreateDeptId());
 
         Boolean flag = insertByBo(bizCommissionRecordBo);
-        if(!flag){
+        if (!flag) {
             throw new ServiceException("插入佣金记录失败");
         }
     }

@@ -24,22 +24,22 @@ public class CommissionEventListener {
     @Async // 🌟 扔进后台线程池
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) // 🌟 死盯保单 Commit
     public void handlePolicyEvent(PolicyUnderwrittenEvent event) {
-
         CalcCommission param = event.getCalcParam();
         log.info("【异步算账启动】保单ID: {}", param.getPolicyId());
 
-        // 🌟 跨线程终极防坑：恢复上下文！
+        // 🌟 防线 1：只需要恢复租户上下文即可！(MyBatis-Plus 需要它来拼 tenant_id)
         TenantHelper.setDynamic(param.getTenantId());
-        StpUtil.switchTo(param.getCreateById(), () -> {
-            try {
-                bizCommissionRecordService.calcCommission(param);
-                log.info("【异步算账成功】保单ID: {}", param.getPolicyId());
-            } catch (Exception e) {
-                // 如果算账报错了，只记日志，绝不回滚保单！
-                log.error("【严重异常：异步算账失败】保单ID: {}", param.getPolicyId(), e);
-            } finally {
-                TenantHelper.clearDynamic(); // 擦屁股，防止线程池污染
-            }
-        });
+
+        try {
+            // 🌟 防线 2：直接脱掉 StpUtil 的马甲，让系统作为“上帝视角”直接去算账！
+            bizCommissionRecordService.calcCommission(param);
+            log.info("【异步算账成功】保单ID: {}", param.getPolicyId());
+
+        } catch (Exception e) {
+            log.error("【严重异常：异步算账失败】保单ID: {}", param.getPolicyId(), e);
+        } finally {
+            // 🌟 防线 3：擦屁股，防止线程池污染
+            TenantHelper.clearDynamic();
+        }
     }
 }
