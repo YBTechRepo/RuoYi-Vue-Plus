@@ -2,6 +2,8 @@ package org.dromara.insurance.service.impl;
 
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.mybatis.annotation.DataColumn;
+import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -24,7 +26,7 @@ import java.util.Collection;
  * 投保记录Service业务层处理
  *
  * @author li.xiang
- * @date 2026-03-09
+ * @date 2026-03-13
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -40,6 +42,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 投保记录
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public InsuranceApplyRecordVo queryById(Long id){
         return baseMapper.selectVoById(id);
     }
@@ -52,6 +58,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 投保记录分页列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public TableDataInfo<InsuranceApplyRecordVo> queryPageList(InsuranceApplyRecordBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
         Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
@@ -65,6 +75,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 投保记录列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);

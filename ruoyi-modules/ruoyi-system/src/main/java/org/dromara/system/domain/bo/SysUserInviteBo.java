@@ -29,7 +29,7 @@ public class SysUserInviteBo extends BaseEntity {
     /**
      * 用户账号
      */
-    @NotBlank(message = "用户账号不能为空", groups = { AddGroup.class, EditGroup.class })
+    //@NotBlank(message = "用户账号不能为空", groups = { AddGroup.class, EditGroup.class })
     private String userName;
 
     /**
@@ -65,7 +65,7 @@ public class SysUserInviteBo extends BaseEntity {
     /**
      * 申请部门ID(可选)
      */
-    @NotNull(message = "申请部门ID(可选)不能为空", groups = { AddGroup.class, EditGroup.class })
+    //@NotNull(message = "申请部门ID(可选)不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long deptId;
 
     /**
@@ -89,5 +89,10 @@ public class SysUserInviteBo extends BaseEntity {
      */
     private Long version;
 
+    /**
+     * 注册身份
+     */
+    private String inviteType;
 
+    private Long inviteId;
 }

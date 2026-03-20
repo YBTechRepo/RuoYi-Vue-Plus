@@ -2,10 +2,12 @@ package org.dromara.insurance.controller;
 
 import java.util.List;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -54,6 +56,15 @@ public class InsuranceProductConfigController extends BaseController {
     public void export(InsuranceProductConfigBo bo, HttpServletResponse response) {
         List<InsuranceProductConfigVo> list = insuranceProductConfigService.queryList(bo);
         ExcelUtil.exportExcel(list, "产品配置", InsuranceProductConfigVo.class, response);
+    }
+
+    /**
+     * 获取授权产品
+     */
+    @SaCheckLogin
+    @GetMapping("/marketList")
+    public TableDataInfo<MarketProductVo> marketList(InsuranceProductConfigBo bo,PageQuery pageQuery) {
+        return insuranceProductConfigService.queryMarketPageList(bo, pageQuery);
     }
 
     /**

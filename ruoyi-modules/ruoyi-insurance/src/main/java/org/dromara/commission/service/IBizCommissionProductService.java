@@ -8,6 +8,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 特殊产品费率配置Service接口
@@ -75,4 +76,12 @@ public interface IBizCommissionProductService {
      * @return 特殊产品费率配置
      */
     BizCommissionProduct queryByProductIdAndTenantId(Long productId, String tenantId);
+
+
+    /**
+     * 批量查询特殊产品费率配置
+     * @param productIds 产品ID集合
+     * @return 特殊产品费率配置
+     */
+    Map<Long, BizCommissionProductVo> getBatchSpecialConfigs(List<Long> productIds);
 }

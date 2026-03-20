@@ -1,11 +1,18 @@
 package org.dromara.system.controller.system;
 
+import java.util.Date;
 import java.util.List;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaIgnore;
+import cn.hutool.core.date.DateUtil;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.redis.utils.RedisUtils;
+import org.dromara.system.service.ISysUserService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -32,9 +39,12 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/system/userInvite")
+@Slf4j
 public class SysUserInviteController extends BaseController {
 
     private final ISysUserInviteService sysUserInviteService;
+
+    private final ISysUserService sysUserService;
 
     /**
      * 查询人员邀请登记列表
@@ -71,7 +81,8 @@ public class SysUserInviteController extends BaseController {
     /**
      * 新增人员邀请登记
      */
-    @SaCheckPermission("system:userInvite:add")
+//    @SaCheckPermission("system:userInvite:add")
+    @SaIgnore
     @Log(title = "人员邀请登记", businessType = BusinessType.INSERT)
     @RepeatSubmit()
     @PostMapping()
@@ -101,5 +112,14 @@ public class SysUserInviteController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
         return toAjax(sysUserInviteService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/approve")
+    @RepeatSubmit()
+    public R<Void> approve(@RequestBody SysUserInviteBo bo){
+        // 变更审核状态
+        // 如果审核状态为已通过 则插入用户
+        return toAjax(sysUserInviteService.updateAndInsertUserByInviteId(bo));
     }
 }

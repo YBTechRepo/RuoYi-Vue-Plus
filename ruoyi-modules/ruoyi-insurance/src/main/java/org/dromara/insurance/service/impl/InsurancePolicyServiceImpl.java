@@ -2,6 +2,8 @@ package org.dromara.insurance.service.impl;
 
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.mybatis.annotation.DataColumn;
+import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -40,6 +42,10 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      * @return 承保保单
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public InsurancePolicyVo queryById(Long id){
         return baseMapper.selectVoById(id);
     }
@@ -52,6 +58,10 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      * @return 承保保单分页列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public TableDataInfo<InsurancePolicyVo> queryPageList(InsurancePolicyBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsurancePolicy> lqw = buildQueryWrapper(bo);
         Page<InsurancePolicyVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
@@ -65,6 +75,10 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      * @return 承保保单列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public List<InsurancePolicyVo> queryList(InsurancePolicyBo bo) {
         LambdaQueryWrapper<InsurancePolicy> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);

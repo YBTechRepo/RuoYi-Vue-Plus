@@ -8,12 +8,13 @@ import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
+import java.math.BigDecimal;
 
 /**
  * 投保记录业务对象 biz_insurance_apply_record
  *
  * @author li.xiang
- * @date 2026-03-09
+ * @date 2026-03-13
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -84,19 +85,17 @@ public class InsuranceApplyRecordBo extends BaseEntity {
      * 登记保费
      */
     @NotNull(message = "登记保费不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long premium;
+    private BigDecimal premium;
 
     /**
      * 订单状态
      */
-    @NotNull(message = "订单状态不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long status;
+    private Integer status;
 
     /**
      * 结算状态
      */
-    @NotNull(message = "结算状态不能为空", groups = { AddGroup.class, EditGroup.class })
-    private Long commissionStatus;
+    private Integer commissionStatus;
 
     /**
      * 删除标识
@@ -106,7 +105,7 @@ public class InsuranceApplyRecordBo extends BaseEntity {
     /**
      * 乐观锁版本
      */
-    private Long version;
+    private Integer version;
 
 
 }

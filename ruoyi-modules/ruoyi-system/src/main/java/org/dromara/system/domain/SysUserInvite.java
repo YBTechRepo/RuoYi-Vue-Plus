@@ -84,5 +84,5 @@ public class SysUserInvite extends TenantEntity {
     @Version
     private Long version;
 
-
+    private String inviteType;
 }

@@ -107,5 +107,7 @@ public class SysUserInviteVo implements Serializable {
     @ExcelProperty(value = "乐观锁版本")
     private Long version;
 
+    @ExcelProperty(value = "注册身份")
+    private String inviteType;
 
 }

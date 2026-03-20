@@ -75,4 +75,12 @@ public interface IBizCommissionDeptService {
      * @return 机构费率配置
      */
     BizCommissionDept queryByDeptIdAndTenantId(Long deptId, String tenantId);
+
+    /**
+     * 根据部门ID查询机构费率配置
+     *
+     * @param deptId 部门ID
+     * @return 机构费率配置
+     */
+    BizCommissionDept queryByDeptId(Long deptId);
 }

@@ -118,6 +118,9 @@ public class SysUser extends TenantEntity {
      */
     private Long referrerId;
 
+    private Long inviteId;
+    private String inviteType;
+
 
     public SysUser(Long userId) {
         this.userId = userId;

@@ -139,4 +139,12 @@ public class BizCommissionDeptServiceImpl implements IBizCommissionDeptService {
                 .eq(BizCommissionDept::getDeptId, deptId)
                 .eq(BizCommissionDept::getTenantId, tenantId));
     }
+
+    @Override
+    public BizCommissionDept queryByDeptId(Long deptId) {
+        return baseMapper.selectOne(Wrappers.lambdaQuery(BizCommissionDept.class)
+            .eq(BizCommissionDept::getDeptId, deptId)
+            .eq(BizCommissionDept::getStatus, 0)
+        );
+    }
 }

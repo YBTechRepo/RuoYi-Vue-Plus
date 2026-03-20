@@ -1,5 +1,6 @@
 package org.dromara.insurance.domain.vo;
 
+import java.math.BigDecimal;
 import org.dromara.insurance.domain.InsuranceApplyRecord;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -18,7 +19,7 @@ import java.util.Date;
  * 投保记录视图对象 biz_insurance_apply_record
  *
  * @author li.xiang
- * @date 2026-03-09
+ * @date 2026-03-13
  */
 @Data
 @ExcelIgnoreUnannotated
@@ -92,21 +93,21 @@ public class InsuranceApplyRecordVo implements Serializable {
      * 登记保费
      */
     @ExcelProperty(value = "登记保费")
-    private Long premium;
+    private BigDecimal premium;
 
     /**
      * 订单状态
      */
     @ExcelProperty(value = "订单状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_apply_status")
-    private Long status;
+    private Integer status;
 
     /**
      * 结算状态
      */
     @ExcelProperty(value = "结算状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_commission_status")
-    private Long commissionStatus;
+    private Integer commissionStatus;
 
     /**
      * 创建时间
@@ -124,7 +125,7 @@ public class InsuranceApplyRecordVo implements Serializable {
      * 乐观锁版本
      */
     @ExcelProperty(value = "乐观锁版本")
-    private Long version;
+    private Integer version;
 
 
 }

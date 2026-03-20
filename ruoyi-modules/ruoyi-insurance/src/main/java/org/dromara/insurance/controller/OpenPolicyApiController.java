@@ -103,9 +103,9 @@ public class OpenPolicyApiController {
         return R.ok();
     }
 
-    @SaIgnore
-    @GetMapping("/getUserInfo")
-    public Object getUserInfo(@RequestParam Long userId){
-        return openPolicyFacadeService.getUserByUserId(userId);
-    }
+//    @SaIgnore
+//    @GetMapping("/getUserInfo")
+//    public Object getUserInfo(@RequestParam Long userId){
+//        return openPolicyFacadeService.getUserByUserId(userId);
+//    }
 }

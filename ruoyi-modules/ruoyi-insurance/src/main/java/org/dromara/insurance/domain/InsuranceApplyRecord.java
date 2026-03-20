@@ -4,6 +4,7 @@ import org.dromara.common.tenant.core.TenantEntity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import java.math.BigDecimal;
 
 import java.io.Serial;
 
@@ -11,7 +12,7 @@ import java.io.Serial;
  * 投保记录对象 biz_insurance_apply_record
  *
  * @author li.xiang
- * @date 2026-03-09
+ * @date 2026-03-13
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -75,17 +76,17 @@ public class InsuranceApplyRecord extends TenantEntity {
     /**
      * 登记保费
      */
-    private Long premium;
+    private BigDecimal premium;
 
     /**
      * 订单状态
      */
-    private Long status;
+    private Integer status;
 
     /**
      * 结算状态
      */
-    private Long commissionStatus;
+    private Integer commissionStatus;
 
     /**
      * 删除标识
@@ -97,7 +98,7 @@ public class InsuranceApplyRecord extends TenantEntity {
      * 乐观锁版本
      */
     @Version
-    private Long version;
+    private Integer version;
 
 
 }

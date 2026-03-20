@@ -6,8 +6,10 @@ import org.dromara.insurance.domain.bo.InsuranceProductCommissionBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 佣金配置Service接口
@@ -75,4 +77,9 @@ public interface IInsuranceProductCommissionService {
      * @return 佣金配置
      */
     InsuranceProductCommission queryByProductIdAndTenantId(Long productId, String tenantId);
+
+    /**
+     * 批量获取产品费率 (处理了多级优先级：特殊费率 > 机构费率)
+     */
+    Map<Long, BigDecimal> getBatchRateMap(List<Long> productIds);
 }

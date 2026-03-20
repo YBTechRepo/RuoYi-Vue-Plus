@@ -5,6 +5,8 @@ import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
 import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
+import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
+import org.dromara.insurance.domain.vo.MarketProductVo;
 
 import java.util.Collection;
 import java.util.List;
@@ -74,4 +76,14 @@ public interface IInsuranceProductConfigService {
      * @return 产品配置详情
      */
     InsuranceProductConfig queryByProductCodeAndTenantId(String productCode, String tenantId);
+
+    /**
+     * 销售端专属：分页查询产品列表（聚合了动态佣金费率）
+     */
+    TableDataInfo<InsuranceSalesProductVo> querySalesPageList(InsuranceProductConfigBo bo, PageQuery pageQuery);
+
+    /**
+     * 查询授权产品
+     */
+    TableDataInfo<MarketProductVo> queryMarketPageList(InsuranceProductConfigBo bo, PageQuery pageQuery);
 }

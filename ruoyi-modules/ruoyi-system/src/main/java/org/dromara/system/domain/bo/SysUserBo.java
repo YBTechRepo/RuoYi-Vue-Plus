@@ -112,6 +112,9 @@ public class SysUserBo extends BaseEntity {
     private String referrerName;
     private Long referrerId;
 
+    private Long inviteId;
+    private String inviteType;
+
     /**
      * 排除不查询的用户(工作流用)
      */

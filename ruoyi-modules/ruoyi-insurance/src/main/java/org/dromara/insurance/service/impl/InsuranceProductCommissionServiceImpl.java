@@ -1,5 +1,6 @@
 package org.dromara.insurance.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -16,9 +17,9 @@ import org.dromara.insurance.domain.InsuranceProductCommission;
 import org.dromara.insurance.mapper.InsuranceProductCommissionMapper;
 import org.dromara.insurance.service.IInsuranceProductCommissionService;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Collection;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 佣金配置Service业务层处理
@@ -135,8 +136,36 @@ public class InsuranceProductCommissionServiceImpl implements IInsuranceProductC
 
     @Override
     public InsuranceProductCommission queryByProductIdAndTenantId(Long productId, String tenantId) {
+        Date now = new Date();
         return baseMapper.selectOne(new LambdaQueryWrapper<InsuranceProductCommission>()
             .eq(InsuranceProductCommission::getProductId, productId)
-            .eq(InsuranceProductCommission::getTenantId, tenantId));
+            .eq(InsuranceProductCommission::getTenantId, tenantId)
+            .le(InsuranceProductCommission::getEffectiveTime, now)
+            .ge(InsuranceProductCommission::getExpirationTime, now));
+    }
+
+    @Override
+    public Map<Long, BigDecimal> getBatchRateMap(List<Long> productIds) {
+        if (CollUtil.isEmpty(productIds)) {
+            return new HashMap<>();
+        }
+
+        // 1. 发送 1 条 SQL，直接查出这批产品对应的唯一佣金配置
+        // 💡 魔法：RuoYi 底层的多租户拦截器会自动帮你拼上 AND tenant_id = '当前租户'
+        // 所以业务员绝对不会查到别的机构的费率！
+        Date now = new Date();
+        var lqw = Wrappers.<InsuranceProductCommission>lambdaQuery()
+            .in(InsuranceProductCommission::getProductId, productIds)
+            .le(InsuranceProductCommission::getEffectiveTime, now)
+            .ge(InsuranceProductCommission::getExpirationTime, now);
+
+        var commissionList = baseMapper.selectList(lqw);
+
+        // 2. 直接转成 Map 返回 (Key: 产品ID, Value: 佣金比例)
+        return commissionList.stream().collect(Collectors.toMap(
+            InsuranceProductCommission::getProductId,
+            InsuranceProductCommission::getCommissionRate,
+            (v1, v2) -> v1 // 防御性编程：万一有脏数据导致重复，取第一条
+        ));
     }
 }

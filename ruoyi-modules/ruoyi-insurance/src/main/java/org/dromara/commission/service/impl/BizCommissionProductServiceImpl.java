@@ -1,5 +1,7 @@
 package org.dromara.commission.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
+import org.dromara.common.core.utils.DateUtils;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -16,9 +18,8 @@ import org.dromara.commission.domain.BizCommissionProduct;
 import org.dromara.commission.mapper.BizCommissionProductMapper;
 import org.dromara.commission.service.IBizCommissionProductService;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Collection;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 特殊产品费率配置Service业务层处理
@@ -139,5 +140,37 @@ public class BizCommissionProductServiceImpl implements IBizCommissionProductSer
         return baseMapper.selectOne(new LambdaQueryWrapper<BizCommissionProduct>()
             .eq(BizCommissionProduct::getProductId, productId)
             .eq(BizCommissionProduct::getTenantId, tenantId));
+    }
+
+    @Override
+    public Map<Long, BizCommissionProductVo> getBatchSpecialConfigs(List<Long> productIds) {
+        // 1. 防御性拦截：如果前端传来的产品列表是空的，直接返回空 Map，防止 MyBatis 报错
+        if (CollUtil.isEmpty(productIds)) {
+            return new HashMap<>();
+        }
+
+        // 2. 发送 1 条 SQL 批量查出所有涉及到的特殊产品费率
+        Date now = new Date();
+        var lqw = Wrappers.<BizCommissionProduct>lambdaQuery()
+            // 相当于 SQL: WHERE product_id IN (1, 2, 3...)
+            .in(BizCommissionProduct::getProductId, productIds)
+            // 🌟 严谨：只查询状态为 0 (启用) 的特殊配置
+            .eq(BizCommissionProduct::getStatus, 0)
+            .le(BizCommissionProduct::getEffectiveStart, now)
+            .ge(BizCommissionProduct::getEffectiveEnd, now);
+
+        var list = baseMapper.selectList(lqw);
+
+        // 3. 将 List 转换为 Map 返回，方便外层进行 O(1) 的极速匹配
+        return list.stream().collect(Collectors.toMap(
+            // Map 的 Key：产品 ID
+            BizCommissionProduct::getProductId,
+
+            // Map 的 Value：将查出来的 Entity 实体当场转换为外层需要的 VO 对象
+            entity -> MapstructUtils.convert(entity, BizCommissionProductVo.class),
+
+            // 兜底合并策略：万一数据库有脏数据，同一个产品查出了两条启用的特殊配置，保留第一条，防止抛出 Duplicate Key 异常
+            (v1, v2) -> v1
+        ));
     }
 }

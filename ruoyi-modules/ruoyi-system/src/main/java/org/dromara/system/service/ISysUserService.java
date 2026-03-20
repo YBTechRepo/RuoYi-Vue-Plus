@@ -222,9 +222,9 @@ public interface ISysUserService {
     int deleteUserByIds(Long[] userIds);
 
     /**
-     * 通过部门id查询当前部门所有用户
+     * 通过部门 id 查询当前部门所有用户
      *
-     * @param deptId 部门id
+     * @param deptId 部门 id
      * @return 结果
      */
     List<SysUserVo> selectUserListByDept(Long deptId);

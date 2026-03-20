@@ -2,6 +2,7 @@ package org.dromara.insurance.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.commission.domain.CalcCommission;
@@ -10,12 +11,16 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.insurance.domain.InsurancePolicy;
 import org.dromara.insurance.domain.InsuranceProductConfig;
+import org.dromara.insurance.domain.InsuranceTenantProduct;
 import org.dromara.insurance.domain.ResultModel;
 import org.dromara.insurance.domain.bo.InsurancePolicyBo;
 import org.dromara.insurance.domain.dto.PolicyCallbackDto;
 import org.dromara.insurance.domain.dto.PolicyDto;
+import org.dromara.insurance.mapper.InsuranceProductConfigMapper;
+import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsurancePolicyService;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
+import org.dromara.insurance.service.IInsuranceTenantProductService;
 import org.dromara.insurance.service.IOpenPolicyFacadeService;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysUserVo;
@@ -36,6 +41,10 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
 
     private final IInsuranceProductConfigService insuranceProductConfigService;
 
+    private final InsuranceProductConfigMapper insuranceProductConfigMapper;
+
+    private final InsuranceTenantProductMapper insuranceTenantProductMapper;
+
     private final ISysUserService sysUserService;
 
     private final ISysDeptService sysDeptService;
@@ -50,126 +59,137 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             throw new ServiceException("保单数据为空，无法处理回调");
         }
         PolicyDto policyDto = policyCallbackDto.getPolicy();
-        // 查询业务人员信息 并获取tenantId
-        Long userId = Long.valueOf(policyDto.getAgentCode());
-        SysUserVo sysUserVo = sysUserService.selectUserById(userId);
-        if(sysUserVo == null){
-            log.error("agent_id对应的用户不存在，agentId={}", policyDto.getAgentCode());
+
+        // ================= 1. 锚定真实的“出单业务员”身份 =================
+        Long agentId = Long.valueOf(policyDto.getAgentCode());
+        SysUserVo salesUser = sysUserService.selectUserById(agentId);
+        if (salesUser == null) {
+            log.error("agent_id对应的出单用户不存在，agentId={}", policyDto.getAgentCode());
             throw new ServiceException("agent_id对应的用户不存在");
         }
-        // 该用户的租户id
-        String tenantId = sysUserVo.getTenantId();
 
-        // 🌟 核心修复点：立刻开启租户上下文伪装！让底层的 CacheManager 和 MyBatis-Plus 知道你是谁
-        TenantHelper.setDynamic(tenantId);
+        // 🌟 核心提取：这三个值是数据隔离的“定海神针”
+        String tenantId = salesUser.getTenantId();
+        Long salesUserId = salesUser.getUserId();
+        Long salesDeptId = salesUser.getDeptId();
 
-        // 查询产品详情
+        // 开启多租户霸体（包裹整个保单处理生命周期）
         try {
+            TenantHelper.setDynamic(tenantId);
+
+            // ================= 2. 查产品详情与防重 =================
             String productPlanCode = policyDto.getProductPlanCode();
-            InsuranceProductConfig product = insuranceProductConfigService.queryByProductCodeAndTenantId(productPlanCode, tenantId);
+
+//            InsuranceProductConfig product = insuranceProductConfigService.queryByProductCodeAndTenantId(productPlanCode, tenantId);
+//            if (product == null) {
+//                throw new ServiceException("产品不存在");
+//            }
+            // 🌟 去平台总库（000000）查出真实的系统产品
+            // 🌟 完美替换 1：用 Mapper 直接查平台总库
+            InsuranceProductConfig product = TenantHelper.dynamic("000000", () -> {
+                return insuranceProductConfigMapper.selectOne(
+                    new LambdaQueryWrapper<InsuranceProductConfig>()
+                        .eq(InsuranceProductConfig::getProductCode, productPlanCode)
+                        .last("LIMIT 1") // 防御性限制，只取第一条
+                );
+            });
             if (product == null) {
-                log.error("产品不存在，productCode={}", productPlanCode);
-                throw new ServiceException("产品不存在");
+                log.error("平台总库中不存在该产品代码，productCode={}", productPlanCode);
+                throw new ServiceException("系统未配置该产品");
             }
-            // 新增保单
-            // 查询该保单号是否已存在
+            // 🌟 校验这件商品，是否真的在当前租户的“货架”上！
+            // 🌟 完美替换 2：用 Mapper 校验这件商品是否在当前租户货架上
+            InsuranceTenantProduct tenantProduct = insuranceTenantProductMapper.selectOne(
+                new LambdaQueryWrapper<InsuranceTenantProduct>()
+                    .eq(InsuranceTenantProduct::getProductId, product.getId())
+                    // 底层依然会自动拼接 tenant_id = 当前回调业务员的租户ID
+                    .last("LIMIT 1")
+            );
+
+            if (tenantProduct == null || !"0".equals(tenantProduct.getStatus())) {
+                // 记录严重越权警告（可视业务情况决定是否 throw 阻断）
+                log.warn("【越权出单警告】业务员卖出了未在机构货架上架的产品！tenantId={}, productId={}", tenantId, product.getId());
+            }
             String policyNo = policyDto.getPolicyNo();
             InsurancePolicy existingPolicy = insurancePolicyService.queryByPolicyNoAndTenantId(policyNo, tenantId);
             if (existingPolicy != null) {
-                log.info("保单号已存在，policyNo={}", policyNo);
                 return ResultModel.success("该保单号对应数据已存在");
             }
 
-            Long createById = null;
-            Long createDeptId = null;
-            CalcCommission calcCommissionParam = new CalcCommission();
+            // ================= 3. 精准架构寻址（上一回合我们定好的完美逻辑） =================
+            CalcCommission calcParam = new CalcCommission();
+            String roleKey = salesUser.getRoles().get(0).getRoleKey();
+            SysDeptVo currentDept = sysDeptService.selectDeptById(salesDeptId);
+            String deptCategory = currentDept.getDeptCategory();
 
-            // 查询团队信息
-            // 当前user的部门id
-            Long deptId = sysUserVo.getDeptId();
+            if (roleKey.equals("bizman")) { // 业务员
+                calcParam.setSalesUserId(salesUserId);
+                calcParam.setSalesUserName(salesUser.getNickName());
 
-            // 先确认当前agent_id对应的用户身份
-            // 职级代码
-            String roleKey = sysUserVo.getRoles().get(0).getRoleKey();
+                Long directLeaderId = currentDept.getLeader();
+                SysUserVo directLeader = directLeaderId != null ? sysUserService.selectUserById(directLeaderId) : null;
+                String directLeaderName = directLeader != null ? directLeader.getNickName() : "";
 
-            if (roleKey.equals("bizman")) {// 业务员
-                calcCommissionParam.setSalesUserId(sysUserVo.getUserId());
-                calcCommissionParam.setSalesUserName(sysUserVo.getNickName());
+                if ("2".equals(deptCategory)) { // 挂在团队下
+                    calcParam.setTeamUserId(directLeaderId);
+                    calcParam.setTeamUserName(directLeaderName);
 
-                SysDeptVo sysDeptVo = sysDeptService.selectDeptById(deptId);
-                log.info("sysDeptVo={}", sysDeptVo);
-                // leader 为团队负责人id
-                Long teamLeaderId = sysDeptVo.getLeader();
-                SysUserVo teamLeader = sysUserService.selectUserById(teamLeaderId);
-                String teamLeaderName = teamLeader.getNickName();
-
-                calcCommissionParam.setTeamUserId(teamLeaderId);
-                calcCommissionParam.setTeamUserName(teamLeaderName);
-
-                if (sysDeptVo.getDeptCategory().equals("2")) {
-                    //获取父id再次查询
-                    SysDeptVo parentDept = sysDeptService.selectDeptById(sysDeptVo.getParentId());
-                    // leader 为团队负责人 id
-                    Long projectLeaderId = parentDept.getLeader();
-                    SysUserVo projectLeader = sysUserService.selectUserById(projectLeaderId);
-                    String projectLeaderName = projectLeader.getNickName();
-
-                    calcCommissionParam.setProjectUserId(projectLeaderId);
-                    calcCommissionParam.setProjectUserName(projectLeaderName);
-                    createById = projectLeaderId;
-                    createDeptId = parentDept.getDeptId();
+                    SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
+                    if (parentDept != null) {
+                        Long projectLeaderId = parentDept.getLeader();
+                        SysUserVo projectLeader = projectLeaderId != null ? sysUserService.selectUserById(projectLeaderId) : null;
+                        calcParam.setProjectUserId(projectLeaderId);
+                        calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
+                    }
+                } else if ("1".equals(deptCategory)) { // 越级直挂项目组
+                    calcParam.setTeamUserId(null);
+                    calcParam.setTeamUserName("");
+                    calcParam.setProjectUserId(directLeaderId);
+                    calcParam.setProjectUserName(directLeaderName);
                 }
-            } else if (roleKey.equals("teamleader")) {// 团队负责人
-                calcCommissionParam.setSalesUserName(sysUserVo.getUserName());
-                calcCommissionParam.setSalesUserId(sysUserVo.getUserId());
-                calcCommissionParam.setTeamUserId(sysUserVo.getUserId());
-                calcCommissionParam.setTeamUserName(sysUserVo.getUserName());
+            } else if (roleKey.equals("teamleader")) { // 团队负责人自己出单
+                calcParam.setSalesUserId(salesUserId);
+                calcParam.setSalesUserName(salesUser.getNickName());
+                calcParam.setTeamUserId(salesUserId);
+                calcParam.setTeamUserName(salesUser.getNickName());
 
-                SysDeptVo sysDeptVo = sysDeptService.selectDeptById(deptId);
-                Long projectLeaderId = sysDeptVo.getLeader();
-                SysUserVo projectLeader = sysUserService.selectUserById(projectLeaderId);
-                String projectLeaderName = projectLeader.getNickName();
-
-                calcCommissionParam.setProjectUserId(projectLeaderId);
-                calcCommissionParam.setProjectUserName(projectLeaderName);
-                createById = projectLeaderId;
-                createDeptId = sysDeptVo.getDeptId();
-            } else { // 项目负责人
-                calcCommissionParam.setSalesUserName(sysUserVo.getUserName());
-                calcCommissionParam.setSalesUserId(sysUserVo.getUserId());
-                calcCommissionParam.setTeamUserName(sysUserVo.getUserName());
-                calcCommissionParam.setTeamUserId(sysUserVo.getUserId());
-                calcCommissionParam.setProjectUserId(sysUserVo.getUserId());
-                calcCommissionParam.setProjectUserName(sysUserVo.getUserName());
-
-                SysDeptVo sysDeptVo = sysDeptService.selectDeptById(deptId);
-                createById = sysUserVo.getUserId();
-                createDeptId = sysDeptVo.getDeptId();
+                SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
+                if (parentDept != null) {
+                    Long projectLeaderId = parentDept.getLeader();
+                    SysUserVo projectLeader = projectLeaderId != null ? sysUserService.selectUserById(projectLeaderId) : null;
+                    calcParam.setProjectUserId(projectLeaderId);
+                    calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
+                }
+            } else { // 项目负责人（大老板）亲自出单
+                calcParam.setSalesUserId(salesUserId);
+                calcParam.setSalesUserName(salesUser.getNickName());
+                calcParam.setTeamUserId(salesUserId);
+                calcParam.setTeamUserName(salesUser.getNickName());
+                calcParam.setProjectUserId(salesUserId);
+                calcParam.setProjectUserName(salesUser.getNickName());
             }
 
-            // 如果上面推导了一圈，createById 还是 null，就兜底用当前业务员的 ID
-            Long finalCreateById = (createById != null) ? createById : sysUserVo.getUserId();
-            Long finalCreateDeptId = (createDeptId != null) ? createDeptId : sysUserVo.getDeptId();
+            // ================= 4. 锁定数据底层归属权 =================
+            calcParam.setPolicyNo(policyNo);
+            calcParam.setProductId(product.getId());
+            calcParam.setTenantId(tenantId);
+            calcParam.setPolicyPremium(new BigDecimal(policyDto.getPrem()));
 
-            // 保存保单
-            Long[] policyIdHolder = new Long[1]; // 用于在 Lambda 外接收 ID
-            StpUtil.switchTo(finalCreateById, () -> {
-                // 只有真正入库的动作才需要穿马甲
-                policyIdHolder[0] = createPolicy(policyCallbackDto, product, sysUserVo, tenantId, finalCreateDeptId);
-            });
+            // 🌟 强行将佣金参数的创建人和部门，锚定为该业务员！
+            // 配合咱们刚才写的 calcCommission 里的 recordBo.setCreateBy(...)，佣金记录就完美隔离了
+            calcParam.setCreateById(salesUserId);
+            calcParam.setCreateDeptId(salesDeptId);
 
-            calcCommissionParam.setPolicyId(policyIdHolder[0]);
-            calcCommissionParam.setPolicyNo(policyNo);
-            calcCommissionParam.setProductId(product.getId());
-            calcCommissionParam.setCreateById(finalCreateById);     // 传入兜底后的安全 ID
-            calcCommissionParam.setCreateDeptId(finalCreateDeptId); // 传入兜底后的安全部门 ID
-            calcCommissionParam.setTenantId(tenantId);
-            calcCommissionParam.setPolicyPremium(new BigDecimal(policyDto.getPrem()));
+            // ================= 5. 保存保单 (废弃 switchTo 伪装) =================
+            // 回调接口无真实登录态，直接传参进去，在里面显式 set
+            Long policyId = createPolicy(policyCallbackDto, product, salesUser, tenantId, salesDeptId);
+            calcParam.setPolicyId(policyId);
 
-            //调用佣金计算
-            applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcCommissionParam));
+            // ================= 6. 触发佣金计算事件 =================
+            applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
 
-            return ResultModel.success(calcCommissionParam);
+            return ResultModel.success(calcParam);
+
         } finally {
             TenantHelper.clearDynamic();
         }
@@ -217,6 +237,10 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         // 固定为身份证
         insurancePolicyBo.setInsuredIdType("0");
         insurancePolicyBo.setInsuredMobile(policyCallbackDto.getInsureds().get(0).getMobile());
+
+        insurancePolicyBo.setCreateBy(sysUser.getUserId());
+        insurancePolicyBo.setCreateDept(sysUser.getDeptId());
+        insurancePolicyBo.setUpdateBy(sysUser.getUserId());
 
         Boolean flag = insurancePolicyService.insertByBo(insurancePolicyBo);
         if (!flag) {
