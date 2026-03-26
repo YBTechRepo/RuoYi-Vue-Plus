@@ -1,6 +1,5 @@
 package org.dromara.insurance.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,6 @@ import org.dromara.insurance.mapper.InsuranceProductConfigMapper;
 import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsurancePolicyService;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
-import org.dromara.insurance.service.IInsuranceTenantProductService;
 import org.dromara.insurance.service.IOpenPolicyFacadeService;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysUserVo;
@@ -97,6 +95,10 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
                 log.error("平台总库中不存在该产品代码，productCode={}", productPlanCode);
                 throw new ServiceException("系统未配置该产品");
             }
+
+            // 防止上面的 dynamic 方法在底层清空了上下文
+            TenantHelper.setDynamic(tenantId);
+
             // 🌟 校验这件商品，是否真的在当前租户的“货架”上！
             // 🌟 完美替换 2：用 Mapper 校验这件商品是否在当前租户货架上
             InsuranceTenantProduct tenantProduct = insuranceTenantProductMapper.selectOne(
@@ -241,6 +243,7 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         insurancePolicyBo.setCreateBy(sysUser.getUserId());
         insurancePolicyBo.setCreateDept(sysUser.getDeptId());
         insurancePolicyBo.setUpdateBy(sysUser.getUserId());
+        insurancePolicyBo.setTenantId(tenantId);
 
         Boolean flag = insurancePolicyService.insertByBo(insurancePolicyBo);
         if (!flag) {

@@ -10,6 +10,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.json.utils.JsonUtils;
+import org.dromara.insurance.domain.bo.ProductCommissionConfig;
 import org.springframework.stereotype.Service;
 import org.dromara.insurance.domain.bo.InsuranceProductCommissionBo;
 import org.dromara.insurance.domain.vo.InsuranceProductCommissionVo;
@@ -136,12 +138,29 @@ public class InsuranceProductCommissionServiceImpl implements IInsuranceProductC
 
     @Override
     public InsuranceProductCommission queryByProductIdAndTenantId(Long productId, String tenantId) {
-        Date now = new Date();
-        return baseMapper.selectOne(new LambdaQueryWrapper<InsuranceProductCommission>()
+        InsuranceProductCommission commission = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceProductCommission>()
             .eq(InsuranceProductCommission::getProductId, productId)
-            .eq(InsuranceProductCommission::getTenantId, tenantId)
-            .le(InsuranceProductCommission::getEffectiveTime, now)
-            .ge(InsuranceProductCommission::getExpirationTime, now));
+            .eq(InsuranceProductCommission::getTenantId, tenantId));
+
+        if (commission != null && StringUtils.isNotBlank(commission.getCommissionConfig())) {
+            List<ProductCommissionConfig> configs = JsonUtils.parseArray(commission.getCommissionConfig(), ProductCommissionConfig.class);
+            Date now = new Date();
+            ProductCommissionConfig activeConfig = configs.stream()
+                .filter(c -> (c.getEffectiveTime() == null || now.after(c.getEffectiveTime()))
+                          && (c.getExpirationTime() == null || now.before(c.getExpirationTime())))
+                .findFirst()
+                .orElse(null);
+
+            if (activeConfig != null) {
+                commission.setCommissionRate(activeConfig.getCommissionRate());
+                commission.setEffectiveTime(activeConfig.getEffectiveTime());
+                commission.setExpirationTime(activeConfig.getExpirationTime());
+            } else {
+                // 如果没有生效的配置，清空费率，防止误用旧数据
+                commission.setCommissionRate(null);
+            }
+        }
+        return commission;
     }
 
     @Override
@@ -150,22 +169,42 @@ public class InsuranceProductCommissionServiceImpl implements IInsuranceProductC
             return new HashMap<>();
         }
 
-        // 1. 发送 1 条 SQL，直接查出这批产品对应的唯一佣金配置
-        // 💡 魔法：RuoYi 底层的多租户拦截器会自动帮你拼上 AND tenant_id = '当前租户'
-        // 所以业务员绝对不会查到别的机构的费率！
-        Date now = new Date();
+        // 1. 发送 1 条 SQL，查出这批产品对应的佣金配置
         var lqw = Wrappers.<InsuranceProductCommission>lambdaQuery()
-            .in(InsuranceProductCommission::getProductId, productIds)
-            .le(InsuranceProductCommission::getEffectiveTime, now)
-            .ge(InsuranceProductCommission::getExpirationTime, now);
+            .in(InsuranceProductCommission::getProductId, productIds);
 
         var commissionList = baseMapper.selectList(lqw);
+        Date now = new Date();
+        Map<Long, BigDecimal> rateMap = new HashMap<>();
 
-        // 2. 直接转成 Map 返回 (Key: 产品ID, Value: 佣金比例)
-        return commissionList.stream().collect(Collectors.toMap(
-            InsuranceProductCommission::getProductId,
-            InsuranceProductCommission::getCommissionRate,
-            (v1, v2) -> v1 // 防御性编程：万一有脏数据导致重复，取第一条
-        ));
+        for (InsuranceProductCommission commission : commissionList) {
+            BigDecimal activeRate = null;
+            if (StringUtils.isNotBlank(commission.getCommissionConfig())) {
+                List<ProductCommissionConfig> configs = JsonUtils.parseArray(commission.getCommissionConfig(), ProductCommissionConfig.class);
+                activeRate = configs.stream()
+                    .filter(c -> (c.getEffectiveTime() == null || now.after(c.getEffectiveTime()))
+                              && (c.getExpirationTime() == null || now.before(c.getExpirationTime())))
+                    .findFirst()
+                    .map(ProductCommissionConfig::getCommissionRate)
+                    .orElse(null);
+            }
+
+            // 如果 JSON 中没有找到生效的，且数据库字段中有值，可以考虑是否作为兜底，但按需求应优先/只看 JSON
+            if (activeRate != null) {
+                rateMap.put(commission.getProductId(), activeRate);
+            } else if (commission.getCommissionRate() != null && isEffective(now, commission.getEffectiveTime(), commission.getExpirationTime())) {
+                // 这里保留对旧字段的兼容性（可选）
+                rateMap.put(commission.getProductId(), commission.getCommissionRate());
+            }
+        }
+
+        return rateMap;
+    }
+
+    private boolean isEffective(Date now, Date start, Date end) {
+        if (now == null) return false;
+        boolean afterStart = (start == null) || !now.before(start);
+        boolean beforeEnd = (end == null) || !now.after(end);
+        return afterStart && beforeEnd;
     }
 }

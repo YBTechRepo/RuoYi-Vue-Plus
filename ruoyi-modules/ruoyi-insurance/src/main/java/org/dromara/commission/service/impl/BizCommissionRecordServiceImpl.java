@@ -1,6 +1,9 @@
 package org.dromara.commission.service.impl;
 
 import org.dromara.commission.domain.*;
+import org.dromara.commission.domain.bo.AppCommissionQueryBo;
+import org.dromara.commission.domain.vo.AppCommissionItemVo;
+import org.dromara.commission.domain.vo.CommissionSummaryVo;
 import org.dromara.commission.service.IBizCommissionDeptService;
 import org.dromara.commission.service.IBizCommissionProductService;
 import org.dromara.common.core.exception.ServiceException;
@@ -89,7 +92,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
     private LambdaQueryWrapper<BizCommissionRecord> buildQueryWrapper(BizCommissionRecordBo bo) {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<BizCommissionRecord> lqw = Wrappers.lambdaQuery();
-        lqw.orderByAsc(BizCommissionRecord::getId);
+        lqw.orderByDesc(BizCommissionRecord::getId);
         lqw.eq(StringUtils.isNotBlank(bo.getPolicyNo()), BizCommissionRecord::getPolicyNo, bo.getPolicyNo());
         lqw.eq(bo.getCreateTime() != null, BizCommissionRecord::getCreateTime, bo.getCreateTime());
         return lqw;
@@ -253,6 +256,30 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
 
         // ================= 4. 兜底处理 =================
         throw new ServiceException("未找到匹配且有效的佣金计算策略");
+    }
+
+    @Override
+    public CommissionSummaryVo getAppCommissionSummary(Long userId, String queryMonth) {
+        // 直接调用 Mapper 里的聚合 SQL
+        CommissionSummaryVo summary = baseMapper.getCommissionSummary(userId, queryMonth);
+
+        // 防空指针兜底 (如果该业务员一单都没开，数据库 SUM 会返回 null)
+        if (summary == null) {
+            summary = new CommissionSummaryVo();
+            summary.setTotalAmount(BigDecimal.ZERO);
+            summary.setMonthAmount(BigDecimal.ZERO);
+        } else {
+            if (summary.getTotalAmount() == null) summary.setTotalAmount(BigDecimal.ZERO);
+            if (summary.getMonthAmount() == null) summary.setMonthAmount(BigDecimal.ZERO);
+        }
+        return summary;
+    }
+
+    @Override
+    public TableDataInfo<AppCommissionItemVo> queryAppCommissionPageList(AppCommissionQueryBo bo, PageQuery pageQuery, Long userId) {
+        // 利用 MyBatis-Plus 的分页插件 + 手写 XML SQL
+        Page<AppCommissionItemVo> page = baseMapper.queryAppCommissionList(pageQuery.build(), bo, userId);
+        return TableDataInfo.build(page);
     }
 
     /**

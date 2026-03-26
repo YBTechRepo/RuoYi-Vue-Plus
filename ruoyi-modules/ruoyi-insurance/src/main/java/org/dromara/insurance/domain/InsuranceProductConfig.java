@@ -5,9 +5,6 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
-import org.dromara.common.translation.annotation.Translation;
-import org.dromara.common.translation.constant.TransConstant;
-
 import java.io.Serial;
 
 /**
@@ -97,5 +94,13 @@ public class InsuranceProductConfig extends TenantEntity {
     @Version
     private Integer version;
 
+    /**
+     * 产品特点 (逗号拼接)
+     */
+    private String productFeatures;
 
+    /**
+     * 服务费配置 (JSON数组)
+     */
+    private String serviceFeeConfig;
 }

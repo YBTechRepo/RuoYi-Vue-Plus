@@ -92,5 +92,8 @@ public class InsuranceProductCommissionVo implements Serializable {
     @ExcelProperty(value = "删除标志")
     private String delFlag;
 
-
+    /**
+     * 佣金配置 (JSON数组)
+     */
+    private String commissionConfig;
 }

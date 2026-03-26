@@ -3,10 +3,12 @@ package org.dromara.insurance.controller;
 import java.util.List;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaIgnore;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -112,5 +114,26 @@ public class InsuranceProductConfigController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
         return toAjax(insuranceProductConfigService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    /**
+     * 获取完整保险产品详细信息 (用于编辑回显)
+     */
+//    @SaCheckPermission("insurance:productConfig:query")
+    @SaCheckLogin
+    @GetMapping("/getFull/{id}")
+    public R<InsuranceProductSaveBo> getFullInfo(@PathVariable("id") Long id) {
+        return R.ok(insuranceProductConfigService.getProductFull(id));
+    }
+
+    /**
+     * 保存完整保险产品 (包含新增和修改)
+     */
+    @SaCheckPermission("insurance:productConfig:add")
+    @Log(title = "保存完整保险产品", businessType = BusinessType.INSERT)
+    @PostMapping("/saveFull")
+    public R<Void> saveFull(@Validated @RequestBody InsuranceProductSaveBo bo) {
+        insuranceProductConfigService.saveFullProduct(bo);
+        return R.ok();
     }
 }

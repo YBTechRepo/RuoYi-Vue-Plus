@@ -7,6 +7,7 @@ import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.vo.BizCommissionProductVo;
 import org.dromara.commission.service.IBizCommissionDeptService;
 import org.dromara.commission.service.IBizCommissionProductService;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -18,11 +19,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
+import org.dromara.insurance.domain.InsuranceProductDetail;
+import org.dromara.insurance.domain.InsuranceProductLiability;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
+import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
+import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.MarketProductVo;
+import org.dromara.insurance.mapper.InsuranceProductDetailMapper;
+import org.dromara.insurance.mapper.InsuranceProductLiabilityMapper;
 import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsuranceProductCommissionService;
+import org.dromara.insurance.service.IInsuranceProductLiabilityService;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysOssVo;
 import org.dromara.system.service.ISysDeptService;
@@ -53,7 +61,9 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
     private final InsuranceTenantProductMapper insuranceTenantProductMapper;
 
-    private final InsuranceProductConfigMapper insuranceProductConfigMapper;
+    private final InsuranceProductDetailMapper detailMapper;
+
+    private final InsuranceProductLiabilityMapper liabilityMapper;
 
     private final IInsuranceProductCommissionService insuranceProductCommissionService;
 
@@ -208,7 +218,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         // 开启霸体！去平台租户(000000)获取这些产品的名字、图片等真实信息
         String platformTenantId = "000000";
         List<InsuranceProductConfig> baseProducts = TenantHelper.dynamic(platformTenantId, () -> {
-            return insuranceProductConfigMapper.selectBatchIds(productIds);
+            return baseMapper.selectBatchIds(productIds);
         });
 
         // ================= 🌟 新增：独立、统一的 OSS 图片处理逻辑 =================
@@ -516,4 +526,172 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         return TableDataInfo.build(resultPage);
     }
 
+    @Override
+    public void saveFullProduct(InsuranceProductSaveBo formBo) {
+        // 🌟 变动点 1：从嵌套的 product 对象中获取主表数据
+        InsuranceProductConfigBo productBo = formBo.getProduct();
+        if (productBo == null) {
+            throw new ServiceException("产品基础信息不能为空");
+        }
+
+        InsuranceProductConfig mainProduct = BeanUtil.copyProperties(productBo, InsuranceProductConfig.class);
+
+        if (mainProduct.getId() == null) {
+            baseMapper.insert(mainProduct);
+        } else {
+            baseMapper.updateById(mainProduct);
+        }
+
+        // 拿到最新生成的主键 ID
+        Long productId = mainProduct.getId();
+
+        // 2. 处理保障责任表 (1对N) - 策略：先删后插 (最简单稳妥)
+        liabilityMapper.delete(new LambdaQueryWrapper<InsuranceProductLiability>()
+            .eq(InsuranceProductLiability::getProductId, productId));
+
+        if (CollUtil.isNotEmpty(formBo.getLiabilityList())) {
+            List<InsuranceProductLiability> liabilities = formBo.getLiabilityList().stream().map(bo -> {
+                InsuranceProductLiability entity = BeanUtil.copyProperties(bo, InsuranceProductLiability.class);
+                entity.setProductId(productId); // 强行绑定主键
+                entity.setId(null); // 清空前端可能传过来的脏 ID
+                return entity;
+            }).collect(Collectors.toList());
+
+            liabilityMapper.insertBatch(liabilities);
+        }
+
+        // 3. 处理详情表 (1对1) - 包含所有 JSON 富媒体
+        InsuranceProductDetail detail = BeanUtil.copyProperties(formBo, InsuranceProductDetail.class);
+        detail.setProductId(productId);
+
+        // 判断详情表是新增还是更新
+        InsuranceProductDetail existDetail = detailMapper.selectOne(
+            new LambdaQueryWrapper<InsuranceProductDetail>().eq(InsuranceProductDetail::getProductId, productId)
+        );
+        if (existDetail == null) {
+            detailMapper.insert(detail);
+        } else {
+            detail.setId(existDetail.getId());
+            detailMapper.updateById(detail);
+        }
+    }
+
+    @Override
+    public InsuranceProductSaveBo getProductFull(Long id) {
+        // 🌟 核心改造：使用 TenantHelper.dynamic 临时将当前线程的租户身份切换为 "000000"
+        return TenantHelper.dynamic("000000", () -> {
+
+            InsuranceProductSaveBo resultBo = new InsuranceProductSaveBo();
+
+            // 1. 查主表 (此时底层 SQL 会自动拼接 WHERE tenant_id = '000000')
+            InsuranceProductConfig mainProduct = baseMapper.selectById(id);
+            if (mainProduct == null) {
+                throw new ServiceException("产品不存在");
+            }
+            InsuranceProductConfigBo configBo = BeanUtil.copyProperties(mainProduct, InsuranceProductConfigBo.class);
+            resultBo.setProduct(configBo);
+
+            // 2. 查责任表
+            List<InsuranceProductLiability> liabilities = liabilityMapper.selectList(
+                new LambdaQueryWrapper<InsuranceProductLiability>()
+                    .eq(InsuranceProductLiability::getProductId, id)
+                    .orderByAsc(InsuranceProductLiability::getSort)
+            );
+            resultBo.setLiabilityList(BeanUtil.copyToList(liabilities, InsuranceProductLiabilityBo.class));
+
+            // 3. 查详情表
+            InsuranceProductDetail detail = detailMapper.selectOne(
+                new LambdaQueryWrapper<InsuranceProductDetail>().eq(InsuranceProductDetail::getProductId, id)
+            );
+
+            if (detail != null) {
+                // 将 detail 里的字段拷贝到大 BO 里 (包括那些 JSON List)
+                BeanUtil.copyProperties(detail, resultBo);
+
+                // 4. 手动翻译 OSS 图片 ID 为真实 URL
+                // (注: 这个方法内部咱们之前用了 TenantHelper.ignore()，在 RuoYi 中嵌套使用 Helper 是完全兼容且安全的)
+                translateOssIdsToUrls(resultBo);
+            }
+
+            return resultBo;
+
+        }); // 结束 dynamic 代码块，自动恢复为当前登录用户的真实租户身份
+    }
+
+    /**
+     * 手动翻译 OSS 图片/文件 ID 为真实 URL
+     */
+    private void translateOssIdsToUrls(InsuranceProductSaveBo bo) {
+        List<Long> ossIdList = new ArrayList<>();
+
+        // 🌟 0. 新增：收集主产品基础信息中的 头图/入口图 ID
+        if (bo.getProduct() != null) {
+            String mainImgUrl = bo.getProduct().getImgUrl();
+            if (StringUtils.isNotBlank(mainImgUrl) && mainImgUrl.matches("\\d+")) {
+                ossIdList.add(Long.valueOf(mainImgUrl));
+            }
+        }
+
+        // 🌟 1. 收集产品特点图 ID (增加防御：仅纯数字才去翻译)
+        if (CollUtil.isNotEmpty(bo.getFeatureImages())) {
+            bo.getFeatureImages().forEach(idStr -> {
+                if (StringUtils.isNotBlank(idStr) && idStr.matches("\\d+")) {
+                    ossIdList.add(Long.valueOf(idStr));
+                }
+            });
+        }
+
+        // 🌟 2. 收集理赔流程图 ID (增加防御：仅纯数字才去翻译)
+        if (CollUtil.isNotEmpty(bo.getClaimImages())) {
+            bo.getClaimImages().forEach(idStr -> {
+                if (StringUtils.isNotBlank(idStr) && idStr.matches("\\d+")) {
+                    ossIdList.add(Long.valueOf(idStr));
+                }
+            });
+        }
+
+        // 3. 收集条款文件的 ID (之前已经写好防御了)
+        if (CollUtil.isNotEmpty(bo.getClauseFiles())) {
+            bo.getClauseFiles().forEach(clause -> {
+                if (StringUtils.isNotBlank(clause.getFileUrl()) && clause.getFileUrl().matches("\\d+")) {
+                    ossIdList.add(Long.valueOf(clause.getFileUrl()));
+                }
+            });
+        }
+
+        if (CollUtil.isNotEmpty(ossIdList)) {
+            // 开启上帝视角查 OSS
+            Map<String, String> urlMap = TenantHelper.ignore(() -> {
+                List<SysOssVo> ossList = sysOssService.listByIds(ossIdList);
+                return ossList.stream().collect(Collectors.toMap(
+                    oss -> String.valueOf(oss.getOssId()), SysOssVo::getUrl
+                ));
+            });
+
+            // 🌟 4. 新增：回写主产品头图的真实 URL
+            if (bo.getProduct() != null) {
+                String mainImgUrl = bo.getProduct().getImgUrl();
+                if (StringUtils.isNotBlank(mainImgUrl)) {
+                    bo.setImgUrl(urlMap.getOrDefault(mainImgUrl, mainImgUrl));
+                }
+            }
+
+            // 3. 回写图片 URL
+            if (CollUtil.isNotEmpty(bo.getFeatureImages())) {
+                bo.setFeatureImages(bo.getFeatureImages().stream().map(id -> urlMap.getOrDefault(id, id)).collect(Collectors.toList()));
+            }
+            if (CollUtil.isNotEmpty(bo.getClaimImages())) {
+                bo.setClaimImages(bo.getClaimImages().stream().map(id -> urlMap.getOrDefault(id, id)).collect(Collectors.toList()));
+            }
+
+            // 🌟 4. 新增：回写条款文件的真实 URL
+            if (CollUtil.isNotEmpty(bo.getClauseFiles())) {
+                bo.getClauseFiles().forEach(clause -> {
+                    if (StringUtils.isNotBlank(clause.getFileUrl())) {
+                        clause.setFileUrl(urlMap.getOrDefault(clause.getFileUrl(), clause.getFileUrl()));
+                    }
+                });
+            }
+        }
+    }
 }

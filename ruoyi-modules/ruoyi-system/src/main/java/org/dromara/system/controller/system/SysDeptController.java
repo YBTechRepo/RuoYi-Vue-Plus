@@ -1,5 +1,6 @@
 package org.dromara.system.controller.system;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.hutool.core.convert.Convert;
 import lombok.RequiredArgsConstructor;
@@ -143,4 +144,9 @@ public class SysDeptController extends BaseController {
         return R.ok(deptService.selectDeptByIds(deptIds == null ? null : List.of(deptIds)));
     }
 
+    @SaCheckLogin
+    @GetMapping("/getTopDept")
+    public R<SysDeptVo> getTopDept(@RequestParam Long deptId) {
+        return R.ok(deptService.selectTopDeptById(deptId));
+    }
 }

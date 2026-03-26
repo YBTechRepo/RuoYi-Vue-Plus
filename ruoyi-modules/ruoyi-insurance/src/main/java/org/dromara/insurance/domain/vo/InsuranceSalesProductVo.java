@@ -98,4 +98,6 @@ public class InsuranceSalesProductVo {
     private BigDecimal displayCommissionRate;
 
     private Long tenantProductId;
+
+    private String productFeatures;
 }

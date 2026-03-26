@@ -9,8 +9,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
-import org.dromara.common.translation.annotation.Translation;
-import org.dromara.common.translation.constant.TransConstant;
 
 /**
  * 产品配置业务对象 biz_insurance_product
@@ -104,5 +102,13 @@ public class InsuranceProductConfigBo extends BaseEntity {
      */
     private Integer version;
 
+    /**
+     * 产品特点 (逗号拼接)
+     */
+    private String productFeatures;
 
+    /**
+     * 服务费配置 (JSON数组)
+     */
+    private String serviceFeeConfig;
 }

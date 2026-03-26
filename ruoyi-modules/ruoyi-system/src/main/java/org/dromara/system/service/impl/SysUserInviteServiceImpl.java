@@ -7,6 +7,8 @@ import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.mybatis.annotation.DataColumn;
+import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -86,6 +88,10 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
      * @return 人员邀请登记分页列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public TableDataInfo<SysUserInviteVo> queryPageList(SysUserInviteBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<SysUserInvite> lqw = buildQueryWrapper(bo);
         Page<SysUserInviteVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
@@ -99,6 +105,10 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
      * @return 人员邀请登记列表
      */
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
     public List<SysUserInviteVo> queryList(SysUserInviteBo bo) {
         LambdaQueryWrapper<SysUserInvite> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);

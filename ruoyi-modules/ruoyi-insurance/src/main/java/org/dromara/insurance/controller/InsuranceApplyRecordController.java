@@ -2,10 +2,13 @@ package org.dromara.insurance.controller;
 
 import java.util.List;
 
+import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.annotation.SaMode;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.common.core.constant.TenantConstants;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -101,5 +104,14 @@ public class InsuranceApplyRecordController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
         return toAjax(insuranceApplyRecordService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    @SaCheckRole(value = {
+        "leader",
+        TenantConstants.TENANT_ADMIN_ROLE_KEY
+    }, mode = SaMode.OR)
+    @PostMapping("/confirmPay")
+    public R<Void> confirmPay(@RequestBody InsuranceApplyRecordVo insuranceApplyRecordVo){
+        return toAjax(insuranceApplyRecordService.handleOrderPaySuccess(insuranceApplyRecordVo.getId()));
     }
 }

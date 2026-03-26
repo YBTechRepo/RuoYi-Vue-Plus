@@ -2,8 +2,6 @@ package org.dromara.insurance.domain.vo;
 
 import java.math.BigDecimal;
 
-import org.dromara.common.translation.annotation.Translation;
-import org.dromara.common.translation.constant.TransConstant;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -116,5 +114,14 @@ public class InsuranceTenantProductVo implements Serializable {
     @ExcelProperty(value = "删除标记")
     private String delFlag;
 
+    /**
+     * 服务费 (费率)
+     */
+    private BigDecimal serviceFee;
+
+    /**
+     * 净费出单保费
+     */
+    private BigDecimal netPremium;
 
 }

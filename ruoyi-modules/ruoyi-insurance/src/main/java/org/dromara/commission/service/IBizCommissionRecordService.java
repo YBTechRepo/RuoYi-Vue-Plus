@@ -1,8 +1,11 @@
 package org.dromara.commission.service;
 
 import org.dromara.commission.domain.CalcCommission;
+import org.dromara.commission.domain.bo.AppCommissionQueryBo;
+import org.dromara.commission.domain.vo.AppCommissionItemVo;
 import org.dromara.commission.domain.vo.BizCommissionRecordVo;
 import org.dromara.commission.domain.bo.BizCommissionRecordBo;
+import org.dromara.commission.domain.vo.CommissionSummaryVo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 
@@ -73,4 +76,8 @@ public interface IBizCommissionRecordService {
      * @param calcCommission
      */
     void calcCommission(CalcCommission calcCommission);
+
+    CommissionSummaryVo getAppCommissionSummary(Long userId, String queryMonth);
+
+    TableDataInfo<AppCommissionItemVo> queryAppCommissionPageList(AppCommissionQueryBo bo, PageQuery pageQuery, Long userId);
 }

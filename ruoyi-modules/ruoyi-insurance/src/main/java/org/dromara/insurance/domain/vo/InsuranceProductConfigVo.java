@@ -130,5 +130,14 @@ public class InsuranceProductConfigVo implements Serializable {
     @ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
+    /**
+     * 产品特点 (逗号拼接)
+     */
+    @ExcelProperty(value = "产品特点")
+    private String productFeatures;
 
+    /**
+     * 服务费配置 (JSON数组)
+     */
+    private String serviceFeeConfig;
 }

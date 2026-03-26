@@ -17,6 +17,8 @@ import org.dromara.insurance.domain.InsuranceProductConfig;
 import org.dromara.insurance.mapper.InsuranceProductConfigMapper;
 import org.dromara.system.domain.vo.SysOssVo;
 import org.dromara.system.service.ISysOssService;
+import org.dromara.common.json.utils.JsonUtils;
+import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.springframework.stereotype.Service;
 import org.dromara.insurance.domain.bo.InsuranceTenantProductBo;
 import org.dromara.insurance.domain.vo.InsuranceTenantProductVo;
@@ -25,6 +27,8 @@ import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsuranceTenantProductService;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -136,6 +140,27 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
 
                 // 🌟 核心：从刚才缓存的 Map 中拿出真实链接，手动赋给 VO
                 vo.setImgUrl(realOssUrlCache.get(baseInfo.getImgUrl()));
+
+                // 🌟 计算服务费和净费
+                if (StringUtils.isNotBlank(baseInfo.getServiceFeeConfig())) {
+                    List<ServiceFeeConfig> feeConfigs = JsonUtils.parseArray(baseInfo.getServiceFeeConfig(), ServiceFeeConfig.class);
+                    Date now = new Date();
+                    ServiceFeeConfig currentConfig = feeConfigs.stream()
+                        .filter(c -> (c.getEffectiveStartTime() == null || now.after(c.getEffectiveStartTime()))
+                                  && (c.getEffectiveEndTime() == null || now.before(c.getEffectiveEndTime())))
+                        .findFirst()
+                        .orElse(null);
+
+                    if (currentConfig != null && currentConfig.getFeeRatio() != null) {
+                        BigDecimal feeRatio = currentConfig.getFeeRatio();
+                        vo.setServiceFee(feeRatio);
+                        if (vo.getMinPremium() != null) {
+                            // 净费 = minPremium * (1 - feeRatio)
+                            BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
+                            vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                        }
+                    }
+                }
             }
             return vo;
         }).collect(Collectors.toList());

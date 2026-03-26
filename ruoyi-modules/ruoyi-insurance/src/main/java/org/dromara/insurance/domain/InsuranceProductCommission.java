@@ -77,5 +77,8 @@ public class InsuranceProductCommission extends TenantEntity {
     @TableLogic
     private String delFlag;
 
-
+    /**
+     * 佣金配置 (JSON数组)
+     */
+    private String commissionConfig;
 }

@@ -1,6 +1,7 @@
 package org.dromara.insurance.service;
 
 import org.dromara.insurance.domain.InsuranceProductConfig;
+import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
 import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -86,4 +87,17 @@ public interface IInsuranceProductConfigService {
      * 查询授权产品
      */
     TableDataInfo<MarketProductVo> queryMarketPageList(InsuranceProductConfigBo bo, PageQuery pageQuery);
+
+    /**
+     * 保存完整产品信息
+     * @param formBo
+     */
+    void saveFullProduct(InsuranceProductSaveBo formBo);
+
+    /**
+     * 获取完整产品信息
+     * @param id
+     * @return
+     */
+    InsuranceProductSaveBo getProductFull(Long id);
 }

@@ -3,4 +3,96 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.commission.mapper.BizCommissionRecordMapper">
+    <select id="getCommissionSummary" resultType="org.dromara.commission.domain.vo.CommissionSummaryVo">
+        SELECT
+        -- 1. 累计总收益 (历史所有时间的钱全部加起来)
+        IFNULL(SUM(
+        CASE WHEN sales_user_id = #{userId} THEN sales_amount ELSE 0 END +
+        CASE WHEN team_user_id = #{userId} THEN team_amount ELSE 0 END +
+        CASE WHEN project_user_id = #{userId} THEN project_amount ELSE 0 END
+        ), 0) AS totalAmount,
+
+        -- 2. 当月/指定月预估收益 (根据前端传的时间来算)
+        IFNULL(SUM(
+        CASE
+        -- 如果前端传了月份参数 (如 '2026-03')
+        <if test="queryMonth != null and queryMonth != ''">
+            WHEN DATE_FORMAT(create_time, '%Y-%m') = #{queryMonth}
+        </if>
+        -- 如果前端没传参数，默认算数据库当前的月份
+        <if test="queryMonth == null or queryMonth == ''">
+            WHEN DATE_FORMAT(create_time, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
+        </if>
+        THEN
+        (CASE WHEN sales_user_id = #{userId} THEN sales_amount ELSE 0 END +
+        CASE WHEN team_user_id = #{userId} THEN team_amount ELSE 0 END +
+        CASE WHEN project_user_id = #{userId} THEN project_amount ELSE 0 END)
+        ELSE 0 END
+        ), 0) AS monthAmount
+
+        FROM biz_commission_record
+        WHERE status = 0 AND del_flag = '0'
+        AND (sales_user_id = #{userId} OR team_user_id = #{userId} OR project_user_id = #{userId})
+    </select>
+
+
+    <select id="queryAppCommissionList" resultType="org.dromara.commission.domain.vo.AppCommissionItemVo">
+        SELECT
+        policy_no AS policyNo,
+        commission_base AS commissionBase,
+        status AS status,
+        create_time AS createTime,
+
+        -- 🌟 核心魔法 1：收益聚合合并
+        <choose>
+            <when test="bo.roleType == 1">
+                -- 直推件：把该用户在这笔订单里所有口袋的钱加起来
+                (sales_ratio +
+                CASE WHEN team_user_id = #{userId} THEN team_ratio ELSE 0 END +
+                CASE WHEN project_user_id = #{userId} THEN project_ratio ELSE 0 END) AS ratio,
+
+                (sales_amount +
+                CASE WHEN team_user_id = #{userId} THEN team_amount ELSE 0 END +
+                CASE WHEN project_user_id = #{userId} THEN project_amount ELSE 0 END) AS amount
+            </when>
+            <when test="bo.roleType == 2">
+                -- 团队件：只看团队口袋的钱
+                team_ratio AS ratio,
+                team_amount AS amount
+            </when>
+            <when test="bo.roleType == 3">
+                -- 分红件：只看分红口袋的钱
+                project_ratio AS ratio,
+                project_amount AS amount
+            </when>
+        </choose>
+
+        FROM biz_commission_record
+        WHERE status = 0 AND del_flag = '0'
+
+        -- 🌟 核心魔法 2：身份互斥过滤 (绝对防止同一个单子出现在多个 Tab)
+        <choose>
+            <when test="bo.roleType == 1">
+                -- 只要是我开的单，全算直推
+                AND sales_user_id = #{userId}
+            </when>
+            <when test="bo.roleType == 2">
+                -- 必须是我拿了团队奖，且不是我亲自开的单
+                AND team_user_id = #{userId}
+                AND sales_user_id != #{userId}
+            </when>
+            <when test="bo.roleType == 3">
+                -- 必须是我拿了分红，且不是我开的单，也不是我直属徒弟开的单
+                AND project_user_id = #{userId}
+                AND team_user_id != #{userId}
+                AND sales_user_id != #{userId}
+            </when>
+        </choose>
+
+        <if test="bo.queryMonth != null and bo.queryMonth != ''">
+            AND DATE_FORMAT(create_time, '%Y-%m') = #{bo.queryMonth}
+        </if>
+
+        ORDER BY create_time DESC
+    </select>
 </mapper>

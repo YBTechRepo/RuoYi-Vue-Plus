@@ -19,6 +19,7 @@ import org.dromara.common.core.utils.*;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.helper.DataBaseHelper;
+import org.dromara.common.mybatis.helper.DataPermissionHelper;
 import org.dromara.common.redis.utils.CacheUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.system.domain.SysDept;
@@ -401,6 +402,27 @@ public class SysDeptServiceImpl implements ISysDeptService, DeptService {
     @Override
     public int deleteDeptById(Long deptId) {
         return baseMapper.deleteById(deptId);
+    }
+
+    @Override
+    public SysDeptVo selectTopDeptById(Long deptId) {
+        SysDept sysDept = baseMapper.selectById(deptId);
+        if(sysDept == null){
+            throw new ServiceException("部门不存在");
+        }
+        if(sysDept.getAncestors().equals("0")){
+            SysDeptVo sysDeptVo = MapstructUtils.convert(sysDept, SysDeptVo.class);
+            return sysDeptVo;
+        }else{
+            String[] ancestors = sysDept.getAncestors().split(",");
+            String topDeptId = ancestors[1];
+            SysDept topDept = baseMapper.selectById(topDeptId);
+            if(topDept == null){
+                throw new ServiceException("部门不存在");
+            }
+            SysDeptVo topDeptVo = MapstructUtils.convert(topDept, SysDeptVo.class);
+            return topDeptVo;
+        }
     }
 
 

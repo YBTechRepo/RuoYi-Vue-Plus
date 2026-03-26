@@ -50,19 +50,19 @@ public class InsuranceProductCommissionBo extends BaseEntity {
     /**
      * 基础佣金比例
      */
-    @NotNull(message = "基础佣金比例不能为空", groups = { AddGroup.class, EditGroup.class })
+    //@NotNull(message = "基础佣金比例不能为空", groups = { AddGroup.class, EditGroup.class })
     private BigDecimal commissionRate;
 
     /**
      * 费率生效时间
      */
-    @NotNull(message = "费率生效时间不能为空", groups = { AddGroup.class, EditGroup.class })
+    //@NotNull(message = "费率生效时间不能为空", groups = { AddGroup.class, EditGroup.class })
     private Date effectiveTime;
 
     /**
      * 费率失效时间
      */
-    @NotNull(message = "费率失效时间不能为空", groups = { AddGroup.class, EditGroup.class })
+    //@NotNull(message = "费率失效时间不能为空", groups = { AddGroup.class, EditGroup.class })
     private Date expirationTime;
 
     /**
@@ -81,5 +81,8 @@ public class InsuranceProductCommissionBo extends BaseEntity {
      */
     private String delFlag;
 
-
+    /**
+     * 佣金配置 (JSON数组)
+     */
+    private String commissionConfig;
 }

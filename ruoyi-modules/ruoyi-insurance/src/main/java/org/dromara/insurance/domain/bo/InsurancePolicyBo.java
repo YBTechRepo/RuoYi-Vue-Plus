@@ -204,5 +204,6 @@ public class InsurancePolicyBo extends BaseEntity {
      */
     private Integer version;
 
+    private String tenantId;
 
 }
