@@ -1,11 +1,15 @@
 package org.dromara.insurance.domain;
 
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import org.dromara.common.tenant.core.TenantEntity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.dromara.insurance.domain.bo.ServiceFeeConfig;
+
 import java.math.BigDecimal;
 import java.io.Serial;
+import java.util.List;
 
 /**
  * 产品配置对象 biz_insurance_product
@@ -103,4 +107,11 @@ public class InsuranceProductConfig extends TenantEntity {
      * 服务费配置 (JSON数组)
      */
     private String serviceFeeConfig;
+
+    private Integer insureMode;
+
+    private Integer paymentMode;
+
+//    @TableField(typeHandler = JacksonTypeHandler.class)
+//    private List<ServiceFeeConfig> serviceFeeConfig;
 }

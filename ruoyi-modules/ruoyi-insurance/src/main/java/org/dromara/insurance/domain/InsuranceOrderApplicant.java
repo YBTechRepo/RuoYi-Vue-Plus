@@ -1,0 +1,83 @@
+package org.dromara.insurance.domain;
+
+import org.dromara.common.tenant.core.TenantEntity;
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.io.Serial;
+
+/**
+ * 投保人信息对象 biz_insurance_order_applicant
+ *
+ * @author li.xiang
+ * @date 2026-03-30
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@TableName("biz_insurance_order_applicant")
+public class InsuranceOrderApplicant extends TenantEntity {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键
+     */
+    @TableId(value = "id")
+    private Long id;
+
+    /**
+     * 关联主订单号
+     */
+    private String orderNo;
+
+    /**
+     * 投保人姓名
+     */
+    private String applicantName;
+
+    /**
+     * 证件生效起期
+     */
+    private String certStartDate;
+
+    /**
+     * 证件生效止期(长期为9999-12-31)
+     */
+    private String certEndDate;
+
+    /**
+     * 投保人身份证号
+     */
+    private String applicantCertNo;
+
+    /**
+     * 投保人证件类型(字典:0-身份证,1-护照,2-出生证等)
+     */
+    private String applicantCertType;
+
+    /**
+     * 投保人手机号
+     */
+    private String applicantPhone;
+
+    /**
+     * 投保人地址
+     */
+    private String applicantAddress;
+
+    /**
+     * 
+     */
+    @Version
+    private Integer version;
+
+    /**
+     * 
+     */
+    @TableLogic
+    private String delFlag;
+
+
+}

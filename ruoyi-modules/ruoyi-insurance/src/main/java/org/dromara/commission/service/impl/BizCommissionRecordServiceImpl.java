@@ -150,67 +150,9 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         return baseMapper.deleteByIds(ids) > 0;
     }
 
-//    @Override
-//    @Transactional(rollbackFor = Exception.class)
-//    public void calcCommission(CalcCommission calcCommission) {
-//        // 1. 查询并校验产品基础佣金费率
-//        Long productId = calcCommission.getProductId();
-//        InsuranceProductCommission productBase = insuranceProductCommissionService.queryByProductIdAndTenantId(productId, calcCommission.getTenantId());
-//
-//        // 💡 优化：使用 Objects.equals 防止空指针
-//        if (productBase == null || !Objects.equals(0, productBase.getStatus())) {
-//            throw new ServiceException("产品基础佣金费率不存在或未启用");
-//        }
-//
-//        Date now = new Date();
-//        if (!isEffective(now, productBase.getEffectiveTime(), productBase.getExpirationTime())) {
-//            throw new ServiceException("产品基础佣金费率不在有效期内");
-//        }
-//
-//        // 计算当前保单总佣金基数
-//        BigDecimal totalCommission = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
-//
-//        // 2. 尝试匹配特殊产品佣金费率 (策略0)
-//        BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, calcCommission.getTenantId());
-//        if (specialProduct != null && Objects.equals(0, specialProduct.getStatus())
-//            && isEffective(now, specialProduct.getEffectiveStart(), specialProduct.getEffectiveEnd())) {
-//            calculateAndSaveRecord(calcCommission, totalCommission,
-//                specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
-//            return;
-//        }
-//
-//        // ================= 3. 尝试匹配机构佣金费率 (策略1) =================
-//
-//        // 🌟 修复：不能直接用底层 createDeptId 查，必须向上找到该租户的顶层机构
-//        Long topLevelDeptId = calcCommission.getCreateDeptId();
-//        SysDeptVo currentSalesDept = sysDeptService.selectDeptById(topLevelDeptId);
-//
-//        if (currentSalesDept != null && StringUtils.isNotBlank(currentSalesDept.getAncestors())) {
-//            String[] ids = currentSalesDept.getAncestors().split(",");
-//            // RuoYi 规则：索引 0 是 '0'，索引 1 通常是该租户的根节点（顶层机构）
-//            if (ids.length > 1) {
-//                topLevelDeptId = Long.valueOf(ids[1]);
-//            }
-//        }
-//
-//        // 拿顶层机构 ID 去查机构佣金配置
-//        BizCommissionDept deptCommission = bizCommissionDeptService.queryByDeptIdAndTenantId(topLevelDeptId, calcCommission.getTenantId());
-//
-//        if (deptCommission != null && Objects.equals(0, deptCommission.getStatus())
-//            && isEffective(now, deptCommission.getEffectiveStart(), deptCommission.getEffectiveEnd())) {
-//            calculateAndSaveRecord(calcCommission, totalCommission,
-//                deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
-//            return;
-//        }
-//
-//        // 4. 兜底处理
-//        throw new ServiceException("未找到匹配且有效的佣金计算策略（特殊产品或机构费率）");
-//    }
-
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void calcCommission(CalcCommission calcCommission) {
-        // 🌟 这里的 ID 现在是 100% 纯正的系统产品 ID
         Long productId = calcCommission.getProductId();
         String tenantId = calcCommission.getTenantId();
         Date now = new Date();
@@ -230,6 +172,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, tenantId);
         if (specialProduct != null && Objects.equals(0, specialProduct.getStatus())
             && isEffective(now, specialProduct.getEffectiveStart(), specialProduct.getEffectiveEnd())) {
+            // 🌟 传入 paymentMode 和 payerUserId (直接从 calcCommission 取即可)
             calculateAndSaveRecord(calcCommission, totalCommission,
                 specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
             return;
@@ -249,6 +192,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         BizCommissionDept deptCommission = bizCommissionDeptService.queryByDeptIdAndTenantId(topLevelDeptId, tenantId);
         if (deptCommission != null && Objects.equals(0, deptCommission.getStatus())
             && isEffective(now, deptCommission.getEffectiveStart(), deptCommission.getEffectiveEnd())) {
+            // 🌟 传入 paymentMode 和 payerUserId
             calculateAndSaveRecord(calcCommission, totalCommission,
                 deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
             return;
@@ -257,6 +201,103 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         // ================= 4. 兜底处理 =================
         throw new ServiceException("未找到匹配且有效的佣金计算策略");
     }
+
+    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
+                                        BigDecimal sRatio, BigDecimal tRatio, BigDecimal pRatio, Integer strategy) {
+
+        // 🌟 1. 核心计算：全部使用乘法并四舍五入保留2位小数
+        BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+
+        // 🌟 2. 身份校验与抵扣判定
+        // 1: 正常佣金(待发放/待结算)   2: 净费出单已抵扣(不需要发钱，前端不显示)
+        boolean isNetPremium = calcCommission.getPaymentMode() != null && calcCommission.getPaymentMode() == 1;
+        Long payerUserId = calcCommission.getPayerUserId();
+
+        int salesStatus = (isNetPremium && calcCommission.getSalesUserId() != null && calcCommission.getSalesUserId().equals(payerUserId)) ? 2 : 1;
+        int teamStatus = (isNetPremium && calcCommission.getTeamUserId() != null && calcCommission.getTeamUserId().equals(payerUserId)) ? 2 : 1;
+        int projectStatus = (isNetPremium && calcCommission.getProjectUserId() != null && calcCommission.getProjectUserId().equals(payerUserId)) ? 2 : 1;
+
+        // 💡 如果您坚持想在数据库里直接存为 0 (做法A)，可以把下面这行代码取消注释：
+        // if (salesStatus == 2) salesCommission = BigDecimal.ZERO;
+
+        // 🌟 3. 组装记录对象并落库
+        InsertCommission param = new InsertCommission();
+        param.setCalcCommission(calcCommission);
+        param.setTotalCommission(totalCommission);
+
+        param.setSalesCommission(salesCommission);
+        param.setTeamCommission(teamCommission);
+        param.setProjectCommission(projectCommission);
+
+        param.setSalesRatio(sRatio);
+        param.setTeamRatio(tRatio);
+        param.setProjectRatio(pRatio);
+        param.setCalcStrategy(strategy);
+
+        // 设置发放状态
+        param.setSalesStatus(salesStatus);
+        param.setTeamStatus(teamStatus);
+        param.setProjectStatus(projectStatus);
+
+        // 落库：只记账，无任何钱包操作！
+        insertCommissionRecord(param);
+
+        log.info("单号:{} 佣金账单已生成。净费抵扣状态(1-正常 2-抵扣隐藏): 业务员-{}, 团队长-{}, 总监-{}",
+            calcCommission.getPolicyNo(), salesStatus, teamStatus, projectStatus);
+    }
+
+//    @Override
+//    @Transactional(rollbackFor = Exception.class)
+//    public void calcCommission(CalcCommission calcCommission) {
+//        // 🌟 这里的 ID 现在是 100% 纯正的系统产品 ID
+//        Long productId = calcCommission.getProductId();
+//        String tenantId = calcCommission.getTenantId();
+//        Date now = new Date();
+//
+//        // ================= 1. 查询并校验产品基础佣金费率 =================
+//        InsuranceProductCommission productBase = insuranceProductCommissionService.queryByProductIdAndTenantId(productId, tenantId);
+//
+//        if (productBase == null || !Objects.equals(0, productBase.getStatus())) {
+//            throw new ServiceException("产品基础佣金费率不存在或未启用");
+//        }
+//        if (!isEffective(now, productBase.getEffectiveTime(), productBase.getExpirationTime())) {
+//            throw new ServiceException("产品基础佣金费率不在有效期内");
+//        }
+//        BigDecimal totalCommission = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
+//
+//        // ================= 2. 尝试匹配特殊产品佣金费率 =================
+//        BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, tenantId);
+//        if (specialProduct != null && Objects.equals(0, specialProduct.getStatus())
+//            && isEffective(now, specialProduct.getEffectiveStart(), specialProduct.getEffectiveEnd())) {
+//            calculateAndSaveRecord(calcCommission, totalCommission,
+//                specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
+//            return;
+//        }
+//
+//        // ================= 3. 尝试匹配机构佣金费率 (向上寻根逻辑) =================
+//        Long topLevelDeptId = calcCommission.getCreateDeptId();
+//        SysDeptVo currentSalesDept = sysDeptService.selectDeptById(topLevelDeptId);
+//
+//        if (currentSalesDept != null && StringUtils.isNotBlank(currentSalesDept.getAncestors())) {
+//            String[] ids = currentSalesDept.getAncestors().split(",");
+//            if (ids.length > 1) {
+//                topLevelDeptId = Long.valueOf(ids[1]);
+//            }
+//        }
+//
+//        BizCommissionDept deptCommission = bizCommissionDeptService.queryByDeptIdAndTenantId(topLevelDeptId, tenantId);
+//        if (deptCommission != null && Objects.equals(0, deptCommission.getStatus())
+//            && isEffective(now, deptCommission.getEffectiveStart(), deptCommission.getEffectiveEnd())) {
+//            calculateAndSaveRecord(calcCommission, totalCommission,
+//                deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
+//            return;
+//        }
+//
+//        // ================= 4. 兜底处理 =================
+//        throw new ServiceException("未找到匹配且有效的佣金计算策略");
+//    }
 
     @Override
     public CommissionSummaryVo getAppCommissionSummary(Long userId, String queryMonth) {
@@ -282,31 +323,31 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         return TableDataInfo.build(page);
     }
 
-    /**
-     * 计算并保存记录 (修复财务计算 Bug)
-     */
-    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
-                                        BigDecimal sRatio, BigDecimal tRatio, BigDecimal pRatio, Integer strategy) {
-
-        // 🌟 修复：必须全部使用乘法，并保留 2 位小数，防止精度丢失和截留平台利润
-        BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-
-        InsertCommission param = new InsertCommission();
-        param.setCalcCommission(calcCommission);
-        param.setTotalCommission(totalCommission);
-        param.setSalesCommission(salesCommission);
-        param.setTeamCommission(teamCommission);
-        param.setProjectCommission(projectCommission);
-        // ... 保存比例等基础信息
-        param.setSalesRatio(sRatio);
-        param.setTeamRatio(tRatio);
-        param.setProjectRatio(pRatio);
-        param.setCalcStrategy(strategy);
-
-        insertCommissionRecord(param);
-    }
+//    /**
+//     * 计算并保存记录 (修复财务计算 Bug)
+//     */
+//    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
+//                                        BigDecimal sRatio, BigDecimal tRatio, BigDecimal pRatio, Integer strategy) {
+//
+//        // 🌟 修复：必须全部使用乘法，并保留 2 位小数，防止精度丢失和截留平台利润
+//        BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+//        BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+//        BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+//
+//        InsertCommission param = new InsertCommission();
+//        param.setCalcCommission(calcCommission);
+//        param.setTotalCommission(totalCommission);
+//        param.setSalesCommission(salesCommission);
+//        param.setTeamCommission(teamCommission);
+//        param.setProjectCommission(projectCommission);
+//        // ... 保存比例等基础信息
+//        param.setSalesRatio(sRatio);
+//        param.setTeamRatio(tRatio);
+//        param.setProjectRatio(pRatio);
+//        param.setCalcStrategy(strategy);
+//
+//        insertCommissionRecord(param);
+//    }
 
     /**
      * 校验时间是否在有效期内 (包含边界)
@@ -318,9 +359,6 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         return afterStart && beforeEnd;
     }
 
-    /**
-     * 插入佣金记录 (彻底解决身份重叠与越级的终极方案)
-     */
     private void insertCommissionRecord(InsertCommission param) {
         BizCommissionRecordBo recordBo = new BizCommissionRecordBo();
         CalcCommission cc = param.getCalcCommission();
@@ -329,7 +367,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         Long teamUserId = cc.getTeamUserId();     // 💡 注意：这里可能为 null
         Long projectUserId = cc.getProjectUserId();
 
-        // ... 省略基础字段的 set 赋值 (PolicyId, ProductId, 名字等) ...
+        // ... 基础字段赋值 ...
         recordBo.setPolicyId(cc.getPolicyId());
         recordBo.setPolicyNo(cc.getPolicyNo());
         recordBo.setProductId(cc.getProductId());
@@ -345,29 +383,39 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         recordBo.setTeamUserName(cc.getTeamUserName());
         recordBo.setProjectUserName(cc.getProjectUserName());
 
-        // ================== 🌟 核心重构：资金向上翻滚 (Roll-up) 逻辑 ==================
-        // 初始应发金额
-        BigDecimal finalSales = param.getSalesCommission();
-        BigDecimal finalTeam = param.getTeamCommission();
-        BigDecimal finalProject = param.getProjectCommission();
+        // 🌟🌟🌟 新增：保存净费抵扣状态 (极其重要，1=正常，2=净费已前置抵扣)
+        recordBo.setSalesStatus(param.getSalesStatus());
+        recordBo.setTeamStatus(param.getTeamStatus());
+        recordBo.setProjectStatus(param.getProjectStatus());
 
-        // 规则 1：如果业务员就是团队负责人，【团队负责人】吃掉【业务员】的那份
+        // ================== 🌟 核心重构：资金向上翻滚 (Roll-up) 安全防弹逻辑 ==================
+        // 防空指针保护
+        BigDecimal finalSales = param.getSalesCommission() != null ? param.getSalesCommission() : BigDecimal.ZERO;
+        BigDecimal finalTeam = param.getTeamCommission() != null ? param.getTeamCommission() : BigDecimal.ZERO;
+        BigDecimal finalProject = param.getProjectCommission() != null ? param.getProjectCommission() : BigDecimal.ZERO;
+
+        // 翻滚规则 1：如果没有团队长（越级直属），团队长的津贴真空，向上滚给总监
+        if (teamUserId == null) {
+            finalProject = finalProject.add(finalTeam);
+            finalTeam = BigDecimal.ZERO;
+        }
+
+        // 翻滚规则 2：如果业务员就是团队长（身份重叠），业务员的钱滚给团队长名下
         if (Objects.equals(salesUserId, teamUserId)) {
             finalTeam = finalTeam.add(finalSales);
             finalSales = BigDecimal.ZERO;
         }
 
-        // 规则 2：如果【团队】为空（即越级直属），或【团队】等于【项目】，【项目负责人】吃掉【团队】那份
-        if (teamUserId == null || Objects.equals(teamUserId, projectUserId)) {
+        // 翻滚规则 3：如果团队长就是总监（身份重叠），团队长的钱滚给总监名下
+        if (Objects.equals(teamUserId, projectUserId)) {
             finalProject = finalProject.add(finalTeam);
             finalTeam = BigDecimal.ZERO;
         }
 
-        // 规则 3：极致重叠防御（如果老总亲自卖单，此时钱可能堆在 finalSales 或 finalTeam 里，全部回滚给 Project）
+        // 翻滚规则 4：防漏网之鱼（如果老总亲自卖单，经过前面的规则，此时 finalSales 可能还有钱，需跨级滚给总监）
         if (Objects.equals(salesUserId, projectUserId)) {
-            finalProject = finalProject.add(finalSales).add(finalTeam);
+            finalProject = finalProject.add(finalSales);
             finalSales = BigDecimal.ZERO;
-            finalTeam = BigDecimal.ZERO;
         }
 
         // 最终赋值

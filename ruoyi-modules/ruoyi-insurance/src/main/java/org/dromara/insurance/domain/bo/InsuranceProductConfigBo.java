@@ -111,4 +111,8 @@ public class InsuranceProductConfigBo extends BaseEntity {
      * 服务费配置 (JSON数组)
      */
     private String serviceFeeConfig;
+
+    private Integer insureMode;
+
+    private Integer paymentMode;
 }

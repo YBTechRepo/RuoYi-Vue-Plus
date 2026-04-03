@@ -24,6 +24,7 @@ import org.dromara.insurance.domain.InsuranceProductLiability;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
 import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
+import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.dromara.insurance.mapper.InsuranceProductDetailMapper;
@@ -616,6 +617,18 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             return resultBo;
 
         }); // 结束 dynamic 代码块，自动恢复为当前登录用户的真实租户身份
+    }
+
+    @Override
+    public String getServiceFeeConfig(Long productId) {
+        return TenantHelper.ignore(() -> {
+            InsuranceProductConfig config = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceProductConfig>()
+                .select(InsuranceProductConfig::getServiceFeeConfig)
+                .eq(InsuranceProductConfig::getId, productId)
+                // 2. 拦截器被屏蔽后，我们手动指定要去查 000000 租户的数据
+                .eq(InsuranceProductConfig::getTenantId, "000000"));
+            return config != null ? config.getServiceFeeConfig() : null;
+        });
     }
 
     /**

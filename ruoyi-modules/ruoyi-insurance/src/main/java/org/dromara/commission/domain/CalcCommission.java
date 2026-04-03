@@ -27,5 +27,15 @@ public class CalcCommission {
 
     private BigDecimal policyPremium;
 
+    /**
+     * 支付方式 (1-净费，2-全额)
+     */
+    private Integer paymentMode;
+
+    /**
+     * 真实的付款人/操作人 ID (用于下游判断谁已经享受了抵扣)
+     */
+    private Long payerUserId;
+
     //private Long projectDeptId;
 }

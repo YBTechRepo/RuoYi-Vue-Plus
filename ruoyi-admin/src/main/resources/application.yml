@@ -132,6 +132,7 @@ tenant:
     - sys_user_role
     - sys_client
     - sys_oss_config
+    - sys_oss
     - flow_spel
 
 # MyBatisPlus配置

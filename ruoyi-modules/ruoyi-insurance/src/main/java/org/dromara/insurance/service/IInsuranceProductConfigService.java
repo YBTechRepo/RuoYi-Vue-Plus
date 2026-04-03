@@ -2,6 +2,7 @@ package org.dromara.insurance.service;
 
 import org.dromara.insurance.domain.InsuranceProductConfig;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
+import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
 import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -100,4 +101,12 @@ public interface IInsuranceProductConfigService {
      * @return
      */
     InsuranceProductSaveBo getProductFull(Long id);
+
+    /**
+     * 根据产品ID获取服务费配置列表
+     *
+     * @param productId 产品ID
+     * @return 服务费配置列表 (结构化对象)
+     */
+    String getServiceFeeConfig(Long productId);
 }

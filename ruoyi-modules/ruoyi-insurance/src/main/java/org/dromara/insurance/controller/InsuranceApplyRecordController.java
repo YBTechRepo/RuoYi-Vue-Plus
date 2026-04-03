@@ -2,13 +2,20 @@ package org.dromara.insurance.controller;
 
 import java.util.List;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.TenantConstants;
+import org.dromara.common.json.utils.JsonUtils;
+import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
+import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -31,6 +38,7 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
  * @author li.xiang
  * @date 2026-03-13
  */
+@Slf4j
 @Validated
 @RequiredArgsConstructor
 @RestController
@@ -113,5 +121,23 @@ public class InsuranceApplyRecordController extends BaseController {
     @PostMapping("/confirmPay")
     public R<Void> confirmPay(@RequestBody InsuranceApplyRecordVo insuranceApplyRecordVo){
         return toAjax(insuranceApplyRecordService.handleOrderPaySuccess(insuranceApplyRecordVo.getId()));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/saveInsureInfo/{orderNo}")
+    public R<SaveInsureResultVO> saveInsureInfo(@PathVariable("orderNo") String orderNo,
+                                  @Validated @RequestBody OrderInsureInfoDTO infoDTO) {
+        log.info("orderNo：{}",orderNo);
+        log.info("infoDTO：{}", JsonUtils.toJsonString(infoDTO));
+        SaveInsureResultVO saveInsureResultVO = insuranceApplyRecordService.saveInsureInfo(orderNo, infoDTO);
+        log.info("saveInsureResultVO：{}", JsonUtils.toJsonString(saveInsureResultVO));
+        return R.ok(saveInsureResultVO);
+    }
+
+    @SaCheckLogin
+    @PostMapping("/payWithBalance")
+    public R<Void> payWithBalance(@RequestBody PayWithBalanceReqDTO payWithBalanceReqDTO) {
+        log.info("payWithBalanceReqDTO：{}",payWithBalanceReqDTO);
+        return toAjax(insuranceApplyRecordService.payWithBalance(payWithBalanceReqDTO));
     }
 }

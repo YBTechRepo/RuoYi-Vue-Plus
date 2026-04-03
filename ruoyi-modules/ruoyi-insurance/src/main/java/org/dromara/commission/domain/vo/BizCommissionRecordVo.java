@@ -163,5 +163,20 @@ public class BizCommissionRecordVo implements Serializable {
     @ExcelProperty(value = "总负责人姓名")
     private String projectUserName;
 
+    /**
+     * 业务员佣金发放状态 (1-正常发放，2-净费已前置抵扣)
+     */
+    private Integer salesStatus;
+
+    /**
+     * 团队长津贴发放状态 (1-正常发放，2-净费已前置抵扣)
+     */
+    private Integer teamStatus;
+
+    /**
+     * 总监津贴发放状态 (1-正常发放，2-净费已前置抵扣)
+     */
+    private Integer projectStatus;
+
 
 }

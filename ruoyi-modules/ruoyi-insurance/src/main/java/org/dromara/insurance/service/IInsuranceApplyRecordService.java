@@ -1,5 +1,8 @@
 package org.dromara.insurance.service;
 
+import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
+import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -67,4 +70,8 @@ public interface IInsuranceApplyRecordService {
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
 
     Boolean handleOrderPaySuccess(Long orderId);
+
+    SaveInsureResultVO saveInsureInfo(String orderNo, OrderInsureInfoDTO infoDTO);
+
+    Boolean payWithBalance(PayWithBalanceReqDTO payWithBalanceReqDTO);
 }

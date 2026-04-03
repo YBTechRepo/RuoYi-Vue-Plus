@@ -56,8 +56,66 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
      * @return 产品库
      */
     @Override
-    public InsuranceTenantProductVo queryById(Long id){
-        return baseMapper.selectVoById(id);
+    public InsuranceTenantProductVo queryById(Long id) {
+        // 1. 先查出本租户的产品关联记录
+        InsuranceTenantProduct tp = baseMapper.selectById(id);
+        if (tp == null) {
+            return null;
+        }
+
+        // 2. 转换为 VO
+        InsuranceTenantProductVo vo = MapstructUtils.convert(tp, InsuranceTenantProductVo.class);
+
+        // 3. 跨租户查询平台主库并缝合数据
+        String platformTenantId = "000000"; // 替换为真实的平台默认租户ID
+        TenantHelper.dynamic(platformTenantId, () -> {
+            InsuranceProductConfig baseInfo = insuranceProductConfigMapper.selectById(tp.getProductId());
+            if (baseInfo != null) {
+                // 缝合基础字段
+                vo.setCompanyCode(baseInfo.getCompanyCode());
+                vo.setProductCode(baseInfo.getProductCode());
+                vo.setProductName(baseInfo.getProductName());
+                vo.setProductType(baseInfo.getProductType());
+                vo.setProductMode(baseInfo.getProductMode());
+                vo.setMinPremium(baseInfo.getMinPremium());
+                vo.setDescription(baseInfo.getDescription());
+
+                // 翻译图片链接 (在平台租户环境下)
+                if (StringUtils.isNotBlank(baseInfo.getImgUrl())) {
+                    try {
+                        Long ossId = Long.valueOf(baseInfo.getImgUrl());
+                        SysOssVo oss = sysOssService.getById(ossId);
+                        if (oss != null && StringUtils.isNotBlank(oss.getUrl())) {
+                            vo.setImgUrl(oss.getUrl());
+                        }
+                    } catch (NumberFormatException e) {
+                        vo.setImgUrl(baseInfo.getImgUrl());
+                    }
+                }
+
+                // 计算服务费和净费
+                if (StringUtils.isNotBlank(baseInfo.getServiceFeeConfig())) {
+                    List<ServiceFeeConfig> feeConfigs = JsonUtils.parseArray(baseInfo.getServiceFeeConfig(), ServiceFeeConfig.class);
+                    Date now = new Date();
+                    ServiceFeeConfig currentConfig = feeConfigs.stream()
+                        .filter(c -> (c.getEffectiveStartTime() == null || now.after(c.getEffectiveStartTime()))
+                                  && (c.getEffectiveEndTime() == null || now.before(c.getEffectiveEndTime())))
+                        .findFirst()
+                        .orElse(null);
+
+                    if (currentConfig != null && currentConfig.getFeeRatio() != null) {
+                        BigDecimal feeRatio = currentConfig.getFeeRatio();
+                        vo.setServiceFee(feeRatio);
+                        if (vo.getMinPremium() != null) {
+                            BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
+                            vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                        }
+                    }
+                }
+            }
+        });
+
+        return vo;
     }
 
     /**

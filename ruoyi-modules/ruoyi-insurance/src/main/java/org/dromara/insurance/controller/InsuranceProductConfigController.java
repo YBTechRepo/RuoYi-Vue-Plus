@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
+import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -135,5 +136,20 @@ public class InsuranceProductConfigController extends BaseController {
     public R<Void> saveFull(@Validated @RequestBody InsuranceProductSaveBo bo) {
         insuranceProductConfigService.saveFullProduct(bo);
         return R.ok();
+    }
+
+    /**
+     * 获取指定产品的服务费配置详情
+     *
+     * @param id 产品ID (主键)
+     */
+    /**
+     * 获取服务费配置 (返回原始 JSON 字符串)
+     */
+    @SaCheckLogin
+    @GetMapping("/getServiceFeeConfig/{id}")
+    public R<String> getServiceFeeConfig(@PathVariable("id") Long id) {
+        String configStr = insuranceProductConfigService.getServiceFeeConfig(id);
+        return R.ok("获取成功", configStr);
     }
 }

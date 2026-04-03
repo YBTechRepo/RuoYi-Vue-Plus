@@ -127,5 +127,24 @@ public class InsuranceApplyRecordVo implements Serializable {
     @ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
+    /**
+     * 净费出单保费
+     */
+    @ExcelProperty(value = "净费出单保费")
+    private BigDecimal netPremium;
+
+    /**
+     * 投保模式 0-自投保 1-代投保
+     */
+    @ExcelProperty(value = "投保模式", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_product_insure_mode")
+    private Integer insureMode;
+
+    /**
+     * 支付模式 0-常规支付 1-余额代扣
+     */
+    @ExcelProperty(value = "支付模式", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_product_payment_mode")
+    private Integer paymentMode;
 
 }

@@ -1,6 +1,7 @@
 package org.dromara.insurance.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import org.dromara.commission.domain.BizCommissionProduct;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -170,11 +171,12 @@ public class InsuranceProductCommissionServiceImpl implements IInsuranceProductC
         }
 
         // 1. 发送 1 条 SQL，查出这批产品对应的佣金配置
+        Date now = new Date();
         var lqw = Wrappers.<InsuranceProductCommission>lambdaQuery()
-            .in(InsuranceProductCommission::getProductId, productIds);
+            .in(InsuranceProductCommission::getProductId, productIds)
+            .eq(InsuranceProductCommission::getStatus, 0);
 
         var commissionList = baseMapper.selectList(lqw);
-        Date now = new Date();
         Map<Long, BigDecimal> rateMap = new HashMap<>();
 
         for (InsuranceProductCommission commission : commissionList) {

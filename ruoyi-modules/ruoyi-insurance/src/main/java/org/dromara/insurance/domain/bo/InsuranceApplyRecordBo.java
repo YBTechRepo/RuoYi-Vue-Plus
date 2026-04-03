@@ -107,5 +107,20 @@ public class InsuranceApplyRecordBo extends BaseEntity {
      */
     private Integer version;
 
+    /**
+     * 净费出单保费
+     */
+    private BigDecimal netPremium;
+
+    /**
+     * 投保模式 0-自投保 1-代投保
+     */
+    private Integer insureMode;
+
+    /**
+     * 支付模式 0-常规支付 1-余额代扣
+     */
+    private Integer paymentMode;
+
 
 }

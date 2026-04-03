@@ -121,13 +121,13 @@ public class InsuranceProductConfigVo implements Serializable {
     /**
      * 删除标识
      */
-    @ExcelProperty(value = "删除标识")
+    //@ExcelProperty(value = "删除标识")
     private String delFlag;
 
     /**
      * 乐观锁版本
      */
-    @ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
     /**
@@ -140,4 +140,8 @@ public class InsuranceProductConfigVo implements Serializable {
      * 服务费配置 (JSON数组)
      */
     private String serviceFeeConfig;
+
+    private Integer insureMode;
+
+    private Integer paymentMode;
 }
