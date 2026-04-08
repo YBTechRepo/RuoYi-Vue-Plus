@@ -31,37 +31,37 @@ public class InsuranceProductDetailVo implements Serializable {
     /**
      * 主键ID
      */
-    @ExcelProperty(value = "主键ID")
+    //@ExcelProperty(value = "主键ID")
     private Long id;
 
     /**
      * 产品ID (关联 biz_insurance_product.id)
      */
-    @ExcelProperty(value = "产品ID (关联 biz_insurance_product.id)")
+    //@ExcelProperty(value = "产品ID (关联 biz_insurance_product.id)")
     private Long productId;
 
     /**
      * 产品特点图 (JSON数组：["url1", "url2"])
      */
-    @ExcelProperty(value = "产品特点图 (JSON数组")
+    //@ExcelProperty(value = "产品特点图 (JSON数组")
     private List<String> featureImages;
 
     /**
      * 理赔流程图 (JSON数组：["url1"])
      */
-    @ExcelProperty(value = "理赔流程图 (JSON数组")
+    //@ExcelProperty(value = "理赔流程图 (JSON数组")
     private List<String> claimImages;
 
     /**
      * 投保须知 (JSON对象数组：[{"title":"", "content":"", "sort":1}])
      */
-    @ExcelProperty(value = "投保须知 (JSON对象数组)")
+    //@ExcelProperty(value = "投保须知 (JSON对象数组)")
     private List<InsuranceProductDetail.NoticeItem> insureNotice;
 
     /**
      * 条款须知文件 (JSON对象数组：[{"clauseName":"", "fileUrl":"", "sort":1}])
      */
-    @ExcelProperty(value = "条款须知文件 (JSON对象数组)")
+    //@ExcelProperty(value = "条款须知文件 (JSON对象数组)")
     private List<InsuranceProductDetail.ClauseItem> clauseFiles;
 
     /**
@@ -72,13 +72,13 @@ public class InsuranceProductDetailVo implements Serializable {
     /**
      * 乐观锁版本
      */
-    @ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锁版本")
     private Long version;
 
     /**
      * 删除标记(0-未删除 1-删除)
      */
-    @ExcelProperty(value = "删除标记(0-未删除 1-删除)")
+    //@ExcelProperty(value = "删除标记(0-未删除 1-删除)")
     private String delFlag;
 
 

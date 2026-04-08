@@ -75,4 +75,7 @@ public interface IBizUserAccountService {
     void adjustBalance(AccountAdjustReqDTO reqDTO);
 
     void deductForOrder(Long userId, String orderNo, BigDecimal amount, String remark);
+
+    void initAccount(Long userId, String userName, String nickName, String tenantId);
+
 }

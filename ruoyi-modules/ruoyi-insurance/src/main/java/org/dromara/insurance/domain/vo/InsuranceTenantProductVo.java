@@ -33,7 +33,7 @@ public class InsuranceTenantProductVo implements Serializable {
     /**
      * ID
      */
-    @ExcelProperty(value = "ID")
+    //@ExcelProperty(value = "ID")
     private Long id;
 
     /**
@@ -105,13 +105,13 @@ public class InsuranceTenantProductVo implements Serializable {
     /**
      * 乐观锁版本
      */
-    @ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
     /**
      * 删除标记
      */
-    @ExcelProperty(value = "删除标记")
+    //@ExcelProperty(value = "删除标记")
     private String delFlag;
 
     /**

@@ -34,7 +34,7 @@ public class InsuranceProductConfigVo implements Serializable {
     /**
      * id
      */
-    @ExcelProperty(value = "id")
+    //@ExcelProperty(value = "id")
     private Long id;
 
     /**

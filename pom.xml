@@ -71,6 +71,7 @@
                 <monitor.password>123456</monitor.password>
             </properties>
         </profile>
+
         <profile>
             <id>dev</id>
             <properties>
@@ -85,6 +86,18 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
         </profile>
+
+        <profile>
+            <id>uat</id>
+            <properties>
+                <!-- 环境标识，需要与配置文件的名称相对应 -->
+                <profiles.active>uat</profiles.active>
+                <logging.level>info</logging.level>
+                <monitor.username>ruoyi</monitor.username>
+                <monitor.password>123456</monitor.password>
+            </properties>
+        </profile>
+
         <profile>
             <id>prod</id>
             <properties>

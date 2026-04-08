@@ -311,6 +311,36 @@ public class BizUserAccountServiceImpl implements IBizUserAccountService {
     }
 
     /**
+     * 初始化用户资金账户
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void initAccount(Long userId, String userName, String nickName, String tenantId) {
+        // 1. 强制开启上帝视角（无视当前登录人的租户隔离），检查目标租户下该用户是否已有账户
+        boolean exists = TenantHelper.ignore(() ->
+            baseMapper.exists(Wrappers.<BizUserAccount>lambdaQuery()
+                .eq(BizUserAccount::getUserId, userId))
+        );
+
+        if (exists) {
+            return;
+        }
+
+        // 2. 构造账户对象
+        BizUserAccount account = new BizUserAccount();
+        account.setUserId(userId);
+        account.setUserName(userName);
+        account.setUserNickName(nickName);
+        account.setBalance(BigDecimal.ZERO);
+        account.setStatus(0);
+        account.setTenantId(tenantId);
+
+        // 3. 强制忽略租户插件的自动过滤，执行插入
+        // 如果不 ignore，MyBatis-Plus 可能会在插入时强行把当前操作员的租户ID覆盖掉这个手动设置的值
+        TenantHelper.ignore(() -> baseMapper.insert(account));
+    }
+
+    /**
      * 专供财务管理员使用的条件构造器
      */
     private LambdaQueryWrapper<BizUserAccount> buildAdminQueryWrapper(BizUserAccountBo bo) {

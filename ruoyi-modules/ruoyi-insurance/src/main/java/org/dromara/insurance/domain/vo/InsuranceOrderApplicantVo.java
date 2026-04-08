@@ -31,7 +31,7 @@ public class InsuranceOrderApplicantVo implements Serializable {
     /**
      * 主键
      */
-    @ExcelProperty(value = "主键")
+    //@ExcelProperty(value = "主键")
     private Long id;
 
     /**
@@ -84,15 +84,15 @@ public class InsuranceOrderApplicantVo implements Serializable {
     private String applicantAddress;
 
     /**
-     * 
+     *
      */
-    @ExcelProperty(value = "")
+    //@ExcelProperty(value = "")
     private Integer version;
 
     /**
-     * 
+     *
      */
-    @ExcelProperty(value = "")
+    //@ExcelProperty(value = "")
     private String tenantId;
 
 

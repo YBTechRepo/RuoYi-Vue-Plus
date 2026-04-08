@@ -33,7 +33,7 @@ public class BannerVo implements Serializable {
     /**
      * 主键ID
      */
-    @ExcelProperty(value = "主键ID")
+    //@ExcelProperty(value = "主键ID")
     private Long id;
 
     /**
@@ -100,7 +100,7 @@ public class BannerVo implements Serializable {
     /**
      * 乐观锁版本
      */
-    @ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
     /**

@@ -158,6 +158,7 @@ public class SysTenantServiceImpl implements ISysTenantService {
         user.setNickName(bo.getUsername());
         user.setPassword(BCrypt.hashpw(bo.getPassword()));
         user.setDeptId(deptId);
+        user.setPhonenumber(bo.getContactPhone());
         userMapper.insert(user);
         //新增系统用户后，默认当前用户为部门的负责人
         SysDept sd = new SysDept();

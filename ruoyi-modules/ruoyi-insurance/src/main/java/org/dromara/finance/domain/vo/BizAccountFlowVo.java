@@ -32,7 +32,7 @@ public class BizAccountFlowVo implements Serializable {
     /**
      * id
      */
-    @ExcelProperty(value = "id")
+    //@ExcelProperty(value = "id")
     private Long id;
 
     /**

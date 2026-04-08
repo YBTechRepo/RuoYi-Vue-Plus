@@ -34,13 +34,13 @@ public class BizCommissionProductVo implements Serializable {
     /**
      * ID
      */
-    @ExcelProperty(value = "ID")
+    //@ExcelProperty(value = "ID")
     private Long id;
 
     /**
      * 产品ID
      */
-    @ExcelProperty(value = "产品ID")
+    //@ExcelProperty(value = "产品ID")
     private Long productId;
 
     /**
@@ -102,13 +102,13 @@ public class BizCommissionProductVo implements Serializable {
     /**
      * 乐观锁版本号
      */
-    @ExcelProperty(value = "乐观锁版本号")
+    //@ExcelProperty(value = "乐观锁版本号")
     private Integer version;
 
     /**
      * 删除标志
      */
-    @ExcelProperty(value = "删除标志")
+    //@ExcelProperty(value = "删除标志")
     private String delFlag;
 
     /**

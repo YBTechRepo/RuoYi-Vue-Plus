@@ -3,6 +3,7 @@ package org.dromara.system.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.crypto.digest.BCrypt;
+import org.dromara.common.core.event.UserInviteSuccessEvent;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.SpringUtils;
@@ -31,6 +32,7 @@ import org.dromara.system.mapper.SysUserMapper;
 import org.dromara.system.service.ISysConfigService;
 import org.dromara.system.service.ISysDeptService;
 import org.dromara.system.service.ISysUserService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.dromara.system.domain.bo.SysUserInviteBo;
 import org.dromara.system.domain.vo.SysUserInviteVo;
@@ -68,6 +70,9 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
     private final ISysUserService sysUserService;
 
     private final ISysDeptService sysDeptService;
+
+    // 🌟 引入 Spring 事件发布器
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 查询人员邀请登记
@@ -150,7 +155,9 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
         return TenantHelper.dynamic(tenantId, () -> {
 
             // 此时，Redis 拦截器会乖乖拼上 998923 的前缀
-            String newAgentCode = this.generateAgentCode();
+            //String newAgentCode = this.generateAgentCode();
+            // agentCode 默认为 手机号
+            String newAgentCode = bo.getPhoneNumber();
 
             SysUserInvite add = MapstructUtils.convert(bo, SysUserInvite.class);
             add.setUserName(newAgentCode);
@@ -241,20 +248,6 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
             throw new ServiceException("推荐人不存在");
         }
 
-        // 判断 inviteType 是否为 teamleader，如果是则创建新部门
-//        Long teamDeptId = null;
-//        SysDeptBo sysDeptBo = null;
-//        if("teamleader".equals(inviteVo.getInviteType())){
-//            sysDeptBo = new SysDeptBo();
-//            sysDeptBo.setParentId(sysUserVo.getDeptId());
-//            sysDeptBo.setDeptName(StringUtils.defaultString(inviteVo.getNickName(), "") + "团队");
-//            sysDeptBo.setDeptCategory("2");
-//            sysDeptBo.setOrderNum(0);
-//            sysDeptBo.setPhone(StringUtils.defaultString(inviteVo.getPhoneNumber(), ""));
-//            sysDeptBo.setStatus("0");
-//            sysDeptService.insertDept(sysDeptBo);
-//            teamDeptId = sysDeptBo.getDeptId();
-//        }
         Long teamDeptId = null;
         SysDeptBo sysDeptBo = null;
         if("teamleader".equals(inviteVo.getInviteType())){
@@ -337,6 +330,16 @@ public class SysUserInviteServiceImpl implements ISysUserInviteService {
                 throw new ServiceException("更新部门负责人失败");
             }
         }
+
+        // 2. 🌟 发布“用户已注册”事件
+        String tenantId = TenantHelper.getTenantId();
+        eventPublisher.publishEvent(new UserInviteSuccessEvent(
+            this,
+            userBo.getUserId(),
+            userBo.getUserName(),
+            userBo.getNickName(),
+            tenantId
+        ));
 
         return true;
     }

@@ -32,7 +32,7 @@ public class InsuranceApplyRecordVo implements Serializable {
     /**
      * id
      */
-    @ExcelProperty(value = "id")
+    //@ExcelProperty(value = "id")
     private Long id;
 
     /**
@@ -118,13 +118,13 @@ public class InsuranceApplyRecordVo implements Serializable {
     /**
      * 删除标识
      */
-    @ExcelProperty(value = "删除标识")
+    //@ExcelProperty(value = "删除标识")
     private String delFlag;
 
     /**
      * 乐观锁版本
      */
-    @ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锁版本")
     private Integer version;
 
     /**

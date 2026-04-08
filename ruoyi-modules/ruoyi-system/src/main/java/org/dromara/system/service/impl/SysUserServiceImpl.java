@@ -1,5 +1,6 @@
 package org.dromara.system.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
@@ -17,12 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.domain.dto.UserDTO;
+import org.dromara.common.core.event.UserInviteSuccessEvent;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.service.UserService;
 import org.dromara.common.core.utils.*;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.satoken.utils.LoginHelper;
+import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.SysUserInvite;
 import org.dromara.system.domain.SysUserPost;
@@ -38,6 +41,7 @@ import org.dromara.system.service.ISysConfigService;
 import org.dromara.system.service.ISysUserService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +64,9 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     private final SysUserPostMapper userPostMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserInviteMapper userInviteMapper;
+
+    // 🌟 引入 Spring 事件发布器
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public TableDataInfo<SysUserVo> selectPageUserList(SysUserBo user, PageQuery pageQuery) {
@@ -315,6 +322,10 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int insertUser(SysUserBo user) {
+        //默认使用当前登录用户的租户号
+        String tenantId = TenantHelper.getTenantId();
+        log.info("tenantId：{}",tenantId);
+
         SysUser sysUser = MapstructUtils.convert(user, SysUser.class);
         // 新增用户信息
         int rows = baseMapper.insert(sysUser);
@@ -323,6 +334,17 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
         insertUserPost(user, false);
         // 新增用户与角色管理
         insertUserRole(user, false);
+
+
+        // 2. 🌟 发布“用户已注册”事件
+        eventPublisher.publishEvent(new UserInviteSuccessEvent(
+            this,
+            sysUser.getUserId(),
+            sysUser.getUserName(),
+            sysUser.getNickName(),
+            tenantId
+        ));
+
         return rows;
     }
 

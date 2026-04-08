@@ -32,7 +32,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 主键ID
      */
-    @ExcelProperty(value = "主键ID")
+    //@ExcelProperty(value = "主键ID")
     private Long id;
 
     /**
@@ -112,13 +112,13 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 乐观锁
      */
-    @ExcelProperty(value = "乐观锁")
+    //@ExcelProperty(value = "乐观锁")
     private Integer version;
 
     /**
      * 删除标志
      */
-    @ExcelProperty(value = "删除标志")
+    //@ExcelProperty(value = "删除标志")
     private String delFlag;
 
     /**
@@ -166,16 +166,22 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 业务员佣金发放状态 (1-正常发放，2-净费已前置抵扣)
      */
+    @ExcelProperty(value = "业务员佣金发放状态", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "commission_pay_status")
     private Integer salesStatus;
 
     /**
      * 团队长津贴发放状态 (1-正常发放，2-净费已前置抵扣)
      */
+    @ExcelProperty(value = "团队长津贴发放状态", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "commission_pay_status")
     private Integer teamStatus;
 
     /**
      * 总监津贴发放状态 (1-正常发放，2-净费已前置抵扣)
      */
+    @ExcelProperty(value = "总监津贴发放状态", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "commission_pay_status")
     private Integer projectStatus;
 
 

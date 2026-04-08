@@ -37,7 +37,7 @@ public class BizRechargeRecordVo implements Serializable {
     /**
      * id
      */
-    @ExcelProperty(value = "id")
+    //@ExcelProperty(value = "id")
     private Long id;
 
     /**
@@ -112,7 +112,7 @@ public class BizRechargeRecordVo implements Serializable {
     /**
      * 乐观锁版本号
      */
-    @ExcelProperty(value = "乐观锁版本号")
+    //@ExcelProperty(value = "乐观锁版本号")
     private Integer version;
 
 

@@ -31,7 +31,7 @@ public class InsuranceOrderInsuredVo implements Serializable {
     /**
      * 主键
      */
-    @ExcelProperty(value = "主键")
+    //@ExcelProperty(value = "主键")
     private Long id;
 
     /**
@@ -43,7 +43,7 @@ public class InsuranceOrderInsuredVo implements Serializable {
     /**
      * 与投保人关系(0-本人,1-配偶等)
      */
-    @ExcelProperty(value = "与投保人关系(0-本人,1-配偶等)", converter = ExcelDictConvert.class)
+    @ExcelProperty(value = "与投保人关系", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_relationship_to_insured")
     private String relation;
 
@@ -74,7 +74,7 @@ public class InsuranceOrderInsuredVo implements Serializable {
     /**
      * 被保人证件类型(同上)
      */
-    @ExcelProperty(value = "被保人证件类型(同上)", converter = ExcelDictConvert.class)
+    @ExcelProperty(value = "被保人证件类型", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_id_type")
     private String insuredCertType;
 
@@ -91,15 +91,15 @@ public class InsuranceOrderInsuredVo implements Serializable {
     private String insuredAddress;
 
     /**
-     * 
+     *
      */
-    @ExcelProperty(value = "")
+    //@ExcelProperty(value = "")
     private Integer version;
 
     /**
-     * 
+     *
      */
-    @ExcelProperty(value = "")
+    //@ExcelProperty(value = "")
     private String tenantId;
 
 
