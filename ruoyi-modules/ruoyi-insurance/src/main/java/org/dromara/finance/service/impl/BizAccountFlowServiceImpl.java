@@ -166,6 +166,23 @@ public class BizAccountFlowServiceImpl implements IBizAccountFlowService {
         );
     }
 
+    @Override
+    public TableDataInfo<BizAccountFlowVo> queryUserAccountFlowList(BizAccountFlowBo bo, PageQuery pageQuery) {
+        Long currentLoginId = LoginHelper.getUserId();
+        if (!currentLoginId.equals(bo.getUserId())) {
+            throw new RuntimeException("非法请求：您无权查看他人的资金账户");
+        }
+
+        LambdaQueryWrapper<BizAccountFlow> lqw = buildUserQueryWrapper(bo);
+
+        Page<BizAccountFlowVo> result = TenantHelper.ignore(() ->
+            DataPermissionHelper.ignore(() ->
+                baseMapper.selectVoPage(pageQuery.build(), lqw)
+            )
+        );
+        return TableDataInfo.build(result);
+    }
+
     private LambdaQueryWrapper<BizAccountFlow> buildUserQueryWrapper(BizAccountFlowBo bo) {
         LambdaQueryWrapper<BizAccountFlow> lqw = Wrappers.lambdaQuery();
         lqw.orderByDesc(BizAccountFlow::getCreateTime);

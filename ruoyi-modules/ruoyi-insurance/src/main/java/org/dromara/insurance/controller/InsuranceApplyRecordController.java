@@ -57,6 +57,33 @@ public class InsuranceApplyRecordController extends BaseController {
     }
 
     /**
+     * 查询批量投保子单列表
+     */
+    @SaCheckPermission("insurance:InsuranceApplyRecord:list")
+    @GetMapping("/subList/{orderNo}")
+    public TableDataInfo<InsuranceApplyRecordVo> subList(@PathVariable("orderNo") String orderNo, PageQuery pageQuery) {
+        return insuranceApplyRecordService.querySubPageList(orderNo, pageQuery);
+    }
+
+    /**
+     * 查询批次子单列表 (不分页)
+     */
+    @SaCheckPermission("insurance:InsuranceApplyRecord:list")
+    @GetMapping("/subOrders")
+    public R<List<java.util.Map<String, Object>>> subOrders(@NotBlank(message = "批次单号不能为空") String batchOrderNo) {
+        return R.ok(insuranceApplyRecordService.querySubOrders(batchOrderNo));
+    }
+    
+    /**
+     * 个人详情 (投被保人信息)
+     */
+    @SaCheckPermission("insurance:InsuranceApplyRecord:query")
+    @GetMapping("/personDetail")
+    public R<java.util.Map<String, Object>> personDetail(@NotBlank(message = "订单号不能为空") String orderNo) {
+        return R.ok(insuranceApplyRecordService.queryPersonDetail(orderNo));
+    }
+
+    /**
      * 导出投保记录列表
      */
     @SaCheckPermission("insurance:InsuranceApplyRecord:export")
@@ -118,12 +145,14 @@ public class InsuranceApplyRecordController extends BaseController {
         "leader",
         TenantConstants.TENANT_ADMIN_ROLE_KEY
     }, mode = SaMode.OR)
+    @RepeatSubmit()
     @PostMapping("/confirmPay")
     public R<Void> confirmPay(@RequestBody InsuranceApplyRecordVo insuranceApplyRecordVo){
         return toAjax(insuranceApplyRecordService.handleOrderPaySuccess(insuranceApplyRecordVo.getId()));
     }
 
     @SaCheckLogin
+    @RepeatSubmit()
     @PostMapping("/saveInsureInfo/{orderNo}")
     public R<SaveInsureResultVO> saveInsureInfo(@PathVariable("orderNo") String orderNo,
                                   @Validated @RequestBody OrderInsureInfoDTO infoDTO) {
@@ -135,6 +164,7 @@ public class InsuranceApplyRecordController extends BaseController {
     }
 
     @SaCheckLogin
+    @RepeatSubmit()
     @PostMapping("/payWithBalance")
     public R<Void> payWithBalance(@RequestBody PayWithBalanceReqDTO payWithBalanceReqDTO) {
         log.info("payWithBalanceReqDTO：{}",payWithBalanceReqDTO);

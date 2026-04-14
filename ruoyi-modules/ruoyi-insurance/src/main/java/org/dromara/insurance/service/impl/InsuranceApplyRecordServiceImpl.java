@@ -26,11 +26,16 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.finance.service.IBizUserAccountService;
 import org.dromara.insurance.domain.*;
 import org.dromara.insurance.domain.bo.ProductCommissionConfig;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.dromara.insurance.domain.dto.BatchInsuredImportDto;
+import org.dromara.insurance.domain.dto.BatchSubmitDTO;
 import org.dromara.insurance.domain.dto.OrderInsuredItemDTO;
 import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
 import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.mapper.*;
+import org.dromara.insurance.service.IInsuranceProductConfigService;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.domain.vo.SysUserVo;
@@ -80,9 +85,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
     private final ApplicationContext applicationContext;
 
+    private final IInsuranceProductConfigService productConfigService;
+
     /**
      * 查询投保记录
-     *
      * @param id 主键
      * @return 投保记录
      */
@@ -129,6 +135,86 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         return baseMapper.selectVoList(lqw);
     }
 
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
+    public TableDataInfo<InsuranceApplyRecordVo> querySubPageList(String orderNo, PageQuery pageQuery) {
+        if (StringUtils.isBlank(orderNo)) {
+            return TableDataInfo.build(new Page<>());
+        }
+        LambdaQueryWrapper<InsuranceApplyRecord> lqw = Wrappers.lambdaQuery();
+        lqw.orderByAsc(InsuranceApplyRecord::getId);
+        lqw.eq(InsuranceApplyRecord::getIsBatch, 2);
+        lqw.eq(InsuranceApplyRecord::getBatchOrderNo, orderNo);
+        Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+        return TableDataInfo.build(result);
+    }
+
+    @Override
+    public List<Map<String, Object>> querySubOrders(String batchOrderNo) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (StringUtils.isBlank(batchOrderNo)) {
+            return result;
+        }
+
+        List<InsuranceApplyRecord> subOrders = baseMapper.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
+            .eq(InsuranceApplyRecord::getBatchOrderNo, batchOrderNo)
+            .eq(InsuranceApplyRecord::getIsBatch, 2)
+            .orderByAsc(InsuranceApplyRecord::getId));
+
+        for (InsuranceApplyRecord subOrder : subOrders) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("orderNo", subOrder.getOrderNo());
+            map.put("status", subOrder.getStatus());
+
+            InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+                .eq(InsuranceOrderApplicant::getOrderNo, subOrder.getOrderNo()));
+            map.put("appName", applicant != null ? applicant.getApplicantName() : "");
+
+            InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+                .eq(InsuranceOrderInsured::getOrderNo, subOrder.getOrderNo()));
+            map.put("insuredName", insured != null ? insured.getInsuredName() : "");
+
+            result.add(map);
+        }
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> queryPersonDetail(String orderNo) {
+        Map<String, Object> result = new HashMap<>();
+        if (StringUtils.isBlank(orderNo)) {
+            return result;
+        }
+
+        result.put("orderNo", orderNo);
+
+        InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+            .eq(InsuranceOrderApplicant::getOrderNo, orderNo));
+        if (applicant != null) {
+            result.put("appName", applicant.getApplicantName());
+            result.put("appPhone", applicant.getApplicantPhone());
+            result.put("appCertType", applicant.getApplicantCertType());
+            result.put("appCertNo", applicant.getApplicantCertNo());
+            result.put("appAddress", applicant.getApplicantAddress());
+        }
+
+        InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+            .eq(InsuranceOrderInsured::getOrderNo, orderNo));
+        if (insured != null) {
+            result.put("insuredName", insured.getInsuredName());
+            result.put("insuredPhone", insured.getInsuredPhone());
+            result.put("insuredCertType", insured.getInsuredCertType());
+            result.put("insuredCertNo", insured.getInsuredCertNo());
+            result.put("relation", insured.getRelation());
+            result.put("insuredAddress", insured.getInsuredAddress());
+        }
+
+        return result;
+    }
+
     private LambdaQueryWrapper<InsuranceApplyRecord> buildQueryWrapper(InsuranceApplyRecordBo bo) {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = Wrappers.lambdaQuery();
@@ -141,6 +227,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         lqw.eq(StringUtils.isNotBlank(bo.getCustomerMobile()), InsuranceApplyRecord::getCustomerMobile, bo.getCustomerMobile());
         lqw.eq(bo.getStatus() != null, InsuranceApplyRecord::getStatus, bo.getStatus());
         lqw.eq(bo.getCommissionStatus() != null, InsuranceApplyRecord::getCommissionStatus, bo.getCommissionStatus());
+
+        // 🌟 仅查询普通单 (0) 和 批次主单 (1)，过滤掉批量子单 (2)
+        lqw.in(InsuranceApplyRecord::getIsBatch, Arrays.asList(0, 1));
+
         return lqw;
     }
 
@@ -387,74 +477,16 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         // 4. 触发佣金计算逻辑 (捕获异常，防止影响扣款事务)
         // ==========================================
         try {
-            Long salesUserId = LoginHelper.getUserId();
-            Long salesDeptId = LoginHelper.getDeptId();
-            SysUserVo salesUser = sysUserService.selectUserById(salesUserId);
-            SysDeptVo currentDept = sysDeptService.selectDeptById(salesDeptId);
+            InsuranceApplyRecordVo recordVo = MapstructUtils.convert(record, InsuranceApplyRecordVo.class);
+            CalcCommission calcParam = buildCalcParam(recordVo);
 
-            if (salesUser != null && currentDept != null && CollUtil.isNotEmpty(salesUser.getRoles())) {
-                CalcCommission calcParam = new CalcCommission();
-                String roleKey = salesUser.getRoles().get(0).getRoleKey();
-                String deptCategory = currentDept.getDeptCategory();
+            // 🌟 将支付方式、真实的付款人以及实际支付保费传给下游！
+            calcParam.setPaymentMode(record.getPaymentMode());
+            calcParam.setPayerUserId(LoginHelper.getUserId());
+            calcParam.setPolicyPremium(actualAmount);
 
-                // 架构寻址：确定各级分润人
-                if ("bizman".equals(roleKey)) {
-                    calcParam.setSalesUserId(salesUserId);
-                    calcParam.setSalesUserName(salesUser.getNickName());
-                    Long directLeaderId = currentDept.getLeader();
-                    SysUserVo directLeader = directLeaderId != null ? sysUserService.selectUserById(directLeaderId) : null;
-                    String directLeaderName = directLeader != null ? directLeader.getNickName() : "";
-
-                    if ("2".equals(deptCategory)) {
-                        calcParam.setTeamUserId(directLeaderId);
-                        calcParam.setTeamUserName(directLeaderName);
-                        SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
-                        if (parentDept != null) {
-                            SysUserVo projectLeader = sysUserService.selectUserById(parentDept.getLeader());
-                            calcParam.setProjectUserId(parentDept.getLeader());
-                            calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
-                        }
-                    } else if ("1".equals(deptCategory)) {
-                        calcParam.setProjectUserId(directLeaderId);
-                        calcParam.setProjectUserName(directLeaderName);
-                    }
-                } else if ("teamleader".equals(roleKey)) {
-                    calcParam.setSalesUserId(salesUserId);
-                    calcParam.setSalesUserName(salesUser.getNickName());
-                    calcParam.setTeamUserId(salesUserId);
-                    calcParam.setTeamUserName(salesUser.getNickName());
-                    SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
-                    if (parentDept != null) {
-                        SysUserVo projectLeader = sysUserService.selectUserById(parentDept.getLeader());
-                        calcParam.setProjectUserId(parentDept.getLeader());
-                        calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
-                    }
-                } else {
-                    calcParam.setSalesUserId(salesUserId);
-                    calcParam.setSalesUserName(salesUser.getNickName());
-                    calcParam.setTeamUserId(salesUserId);
-                    calcParam.setTeamUserName(salesUser.getNickName());
-                    calcParam.setProjectUserId(salesUserId);
-                    calcParam.setProjectUserName(salesUser.getNickName());
-                }
-
-                // 锁定数据底层归属权
-                calcParam.setPolicyId(record.getId());
-                calcParam.setPolicyNo(orderNo);
-                calcParam.setProductId(record.getProductId());
-                calcParam.setTenantId(salesUser.getTenantId());
-                // 🌟 将支付方式和真实的付款人传给下游！
-                calcParam.setPaymentMode(record.getPaymentMode());
-                calcParam.setPayerUserId(salesUserId);
-                calcParam.setPolicyPremium(actualAmount);
-
-                calcParam.setCreateById(salesUserId);
-                calcParam.setCreateDeptId(salesDeptId);
-
-                // 抛出异步事件
-                applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
-                log.info("余额支付成功，已异步抛出佣金计算事件，单号：{}", orderNo);
-            }
+            applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
+            log.info("余额支付成功，已异步抛出佣金计算事件，单号：{}", orderNo);
         } catch (Exception e) {
             log.error("余额支付成功，但触发佣金计算事件失败，单号：{}，原因：{}", orderNo, e.getMessage(), e);
         }
@@ -641,5 +673,128 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             calcParam.setProjectUserName(salesUser.getNickName());
         }
         return calcParam;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String submitBatch(BatchSubmitDTO submitDTO) {
+        if (submitDTO == null || CollUtil.isEmpty(submitDTO.getAuditList())) {
+            throw new ServiceException("投保人员名单不能为空");
+        }
+
+        // 1. 获取产品信息并计算金额 (逻辑同 preview)
+        InsuranceSalesProductVo productVo = productConfigService.querySalesProductById(submitDTO.getProductId());
+        if (productVo == null) {
+            throw new ServiceException("产品不存在或已下架");
+        }
+
+        BigDecimal grossPremium = productVo.getMinPremium() != null ? productVo.getMinPremium() : BigDecimal.ZERO;
+        BigDecimal commissionRate = productVo.getDisplayCommissionRate() != null ? productVo.getDisplayCommissionRate() : BigDecimal.ZERO;
+        // 计算单人净保费：gross * (1 - rate)
+        BigDecimal netPremium = grossPremium.multiply(BigDecimal.ONE.subtract(commissionRate)).setScale(2, RoundingMode.HALF_UP);
+
+        int validCount = submitDTO.getAuditList().size();
+        BigDecimal totalNetPremium = netPremium.multiply(new BigDecimal(validCount)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalGrossPremium = grossPremium.multiply(new BigDecimal(validCount)).setScale(2, RoundingMode.HALF_UP);
+
+        // 2. 扣款
+        Long currentUserId = LoginHelper.getUserId();
+        String batchOrderNo = "BH" + cn.hutool.core.date.DateUtil.format(new Date(), "yyyyMMddHHmmss") + cn.hutool.core.util.RandomUtil.randomNumbers(4);
+        userAccountService.deductForOrder(
+            currentUserId,
+            batchOrderNo,
+            totalNetPremium,
+            "批量投保扣款：" + batchOrderNo + "_" + productVo.getProductName()
+        );
+
+        // 3. 生成批次主单 (status=0 已支付)
+        InsuranceApplyRecord mainOrder = new InsuranceApplyRecord();
+        mainOrder.setOrderNo(batchOrderNo);
+        mainOrder.setProductId(productVo.getId());
+        mainOrder.setProductCode(productVo.getProductCode());
+        mainOrder.setProductName(productVo.getProductName());
+        mainOrder.setAgentUserId(currentUserId);
+        mainOrder.setAgentName(LoginHelper.getUsername());
+        mainOrder.setAgentDeptId(LoginHelper.getDeptId());
+        mainOrder.setPremium(totalGrossPremium);
+        mainOrder.setNetPremium(totalNetPremium);
+
+        // 🌟 增加客户信息赋值
+        if (CollUtil.isNotEmpty(submitDTO.getAuditList())) {
+            BatchInsuredImportDto firstPerson = submitDTO.getAuditList().get(0);
+            mainOrder.setCustomerName(firstPerson.getName() + "等" + validCount + "人");
+            mainOrder.setCustomerMobile(firstPerson.getPhone());
+        }
+
+        mainOrder.setStatus(0);
+        // 主单
+        mainOrder.setIsBatch(1);
+        //代投保
+        mainOrder.setInsureMode(1);
+        // 余额支付
+        mainOrder.setPaymentMode(1);
+        mainOrder.setPayTime(new Date());
+        baseMapper.insert(mainOrder);
+
+        // 4. 循环生成子单及详细信息
+        int subIndex = 1;
+        for (BatchInsuredImportDto dto : submitDTO.getAuditList()) {
+            // 子单号：主单号 + 4位自增序号 (例如: BATCH202604131234561234-0001)
+            String subOrderNo = batchOrderNo + "-" + String.format("%04d", subIndex++);
+
+            // 子单记录
+            InsuranceApplyRecord subOrder = new InsuranceApplyRecord();
+            BeanUtils.copyProperties(mainOrder, subOrder);
+            subOrder.setId(null);
+            subOrder.setOrderNo(subOrderNo);
+            subOrder.setBatchOrderNo(batchOrderNo);
+            subOrder.setIsBatch(2); // 强制覆盖为主单拷贝过来的属性
+            subOrder.setInsureMode(1);
+            subOrder.setPaymentMode(1);
+            subOrder.setPremium(grossPremium);
+            subOrder.setNetPremium(netPremium);
+            subOrder.setCustomerName(dto.getName());
+            subOrder.setCustomerMobile(dto.getPhone());
+            baseMapper.insert(subOrder);
+
+            // 投保人记录
+            InsuranceOrderApplicant applicant = new InsuranceOrderApplicant();
+            applicant.setOrderNo(subOrderNo);
+            applicant.setApplicantName(dto.getAppName());
+            applicant.setApplicantCertType(dto.getAppCertType());
+            applicant.setApplicantCertNo(dto.getAppCertNo());
+            applicant.setApplicantPhone(dto.getAppPhone());
+            applicant.setApplicantAddress(dto.getAppAddress());
+            insuranceOrderApplicantMapper.insert(applicant);
+
+            // 被保人记录
+            InsuranceOrderInsured insured = new InsuranceOrderInsured();
+            insured.setOrderNo(subOrderNo);
+            insured.setRelation(dto.getRelation());
+            insured.setInsuredName(dto.getName());
+            insured.setInsuredCertType(dto.getCertType());
+            insured.setInsuredCertNo(dto.getCertNo());
+            insured.setInsuredPhone(dto.getPhone());
+            insured.setInsuredAddress(dto.getAddress());
+            insuranceOrderInsuredMapper.insert(insured);
+        }
+
+        // 5. 触发佣金计算 (仅为主单触发一次，计算总额分润)
+        try {
+            InsuranceApplyRecordVo mainOrderVo = MapstructUtils.convert(mainOrder, InsuranceApplyRecordVo.class);
+            CalcCommission calcParam = buildCalcParam(mainOrderVo);
+
+            // 🌟 补充主单特有信息 (按照 payWithBalance 方式)
+            calcParam.setPaymentMode(mainOrder.getPaymentMode());
+            calcParam.setPayerUserId(currentUserId);
+            calcParam.setPolicyPremium(totalNetPremium); // 使用实际扣除的总净费计算
+
+            applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
+            log.info("批次主单 {} 佣金计算事件已触发", batchOrderNo);
+        } catch (Exception e) {
+            log.error("批次主单 {} 佣金计算事件触发失败", batchOrderNo, e);
+        }
+
+        return batchOrderNo;
     }
 }

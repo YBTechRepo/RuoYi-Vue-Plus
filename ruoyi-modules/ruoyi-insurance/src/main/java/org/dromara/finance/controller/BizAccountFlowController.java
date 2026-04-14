@@ -3,10 +3,12 @@ package org.dromara.finance.controller;
 import java.util.List;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.finance.domain.AccountAdjustReqDTO;
 import org.dromara.finance.service.IBizUserAccountService;
 import org.springframework.web.bind.annotation.*;
@@ -132,9 +134,28 @@ public class BizAccountFlowController extends BaseController {
     }
 
 
+//    @SaCheckLogin
+//    @PostMapping("/getUserAccountFlow")
+//    public R<List<BizAccountFlowVo>> getUserAccountFlow(@RequestBody BizAccountFlowBo bo){
+//        return R.ok(bizAccountFlowService.queryUserAccountFlow(bo));
+//    }
+
+    /**
+     * 手机端/前台 获取用户的账户流水
+     */
     @SaCheckLogin
     @PostMapping("/getUserAccountFlow")
-    public R<List<BizAccountFlowVo>> getUserAccountFlow(@RequestBody BizAccountFlowBo bo){
-        return R.ok(bizAccountFlowService.queryUserAccountFlow(bo));
+    public TableDataInfo<BizAccountFlowVo> getUserAccountFlow(@RequestBody BizAccountFlowBo bo, PageQuery pageQuery) {
+        // 1. 开启分页 (取决于版本，RuoYi-Vue-Plus 通常用 pageQuery)
+        // PageHelper.startPage(pageQuery.getPageNum(), pageQuery.getPageSize()); // MyBatis 标准版
+
+        // 2. 将当前用户的 ID 强行塞入查询条件，避免越权查到别人的数据
+        Long userId = LoginHelper.getUserId();
+        bo.setUserId(userId);
+
+        // 3. 执行数据库查询
+        TableDataInfo<BizAccountFlowVo> pageResult = bizAccountFlowService.queryUserAccountFlowList(bo, pageQuery);
+
+        return pageResult;
     }
 }

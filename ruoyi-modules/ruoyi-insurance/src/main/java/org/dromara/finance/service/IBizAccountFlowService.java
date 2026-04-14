@@ -69,4 +69,6 @@ public interface IBizAccountFlowService {
     TableDataInfo<BizAccountFlowVo> queryAdminPageList(BizAccountFlowBo bo, PageQuery pageQuery);
 
     List<BizAccountFlowVo> queryUserAccountFlow(BizAccountFlowBo bo);
+
+    TableDataInfo<BizAccountFlowVo> queryUserAccountFlowList(BizAccountFlowBo bo, PageQuery pageQuery);
 }

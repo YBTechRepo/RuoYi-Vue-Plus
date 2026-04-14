@@ -44,7 +44,7 @@ public class InsuranceApplyRecordVo implements Serializable {
     /**
      * 产品ID
      */
-    @ExcelProperty(value = "产品ID")
+    //@ExcelProperty(value = "产品ID")
     private Long productId;
 
     /**
@@ -68,13 +68,13 @@ public class InsuranceApplyRecordVo implements Serializable {
     /**
      * 业务员ID
      */
-    @ExcelProperty(value = "业务员ID")
+    //@ExcelProperty(value = "业务员ID")
     private Long agentUserId;
 
     /**
      * 所属机构ID
      */
-    @ExcelProperty(value = "所属机构ID")
+    //@ExcelProperty(value = "所属机构ID")
     private Long agentDeptId;
 
     /**
@@ -105,7 +105,7 @@ public class InsuranceApplyRecordVo implements Serializable {
     /**
      * 结算状态
      */
-    @ExcelProperty(value = "结算状态", converter = ExcelDictConvert.class)
+    //@ExcelProperty(value = "结算状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_commission_status")
     private Integer commissionStatus;
 
@@ -147,4 +147,86 @@ public class InsuranceApplyRecordVo implements Serializable {
     @ExcelDictFormat(dictType = "insurance_product_payment_mode")
     private Integer paymentMode;
 
+    /**
+     * 是否批量单：0-普通单 1-批次主单 2-批量子单
+     */
+    @ExcelProperty(value = "是否批量单：0-普通单 2-批量子单")
+    private Integer isBatch;
+
+    /**
+     * 所属批次单号（子单指向主单）
+     */
+    @ExcelProperty(value = "所属批次单号")
+    private String batchOrderNo;
+
+    /**
+     * 投保人姓名
+     */
+    @ExcelProperty(value = "投保人姓名")
+    private String appName;
+
+    /**
+     * 投保人证件类型
+     */
+    @ExcelProperty(value = "投保人证件类型", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_id_type")
+    private String appCertType;
+
+    /**
+     * 投保人证件号
+     */
+    @ExcelProperty(value = "投保人证件号")
+    private String appCertNo;
+
+    /**
+     * 投保人手机号
+     */
+    @ExcelProperty(value = "投保人手机号")
+    private String appPhone;
+
+    /**
+     * 投保人地址
+     */
+    @ExcelProperty(value = "投保人地址")
+    private String appAddress;
+
+    /**
+     * 被保人关系
+     */
+    @ExcelProperty(value = "被保人关系", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_relationship_to_insured")
+    private String relation;
+
+    /**
+     * 被保人姓名
+     */
+    @ExcelProperty(value = "被保人姓名")
+    private String insuredName;
+
+    /**
+     * 被保人证件类型
+     */
+    @ExcelProperty(value = "被保人证件类型", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_id_type")
+    private String insuredCertType;
+
+    /**
+     * 被保人证件号
+     */
+    @ExcelProperty(value = "被保人证件号")
+    private String insuredCertNo;
+
+    /**
+     * 被保人手机号
+     */
+    @ExcelProperty(value = "被保人手机号")
+    private String insuredPhone;
+
+    /**
+     * 被保人地址
+     */
+    @ExcelProperty(value = "被保人地址")
+    private String insuredAddress;
+
 }
+

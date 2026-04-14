@@ -122,5 +122,13 @@ public class InsuranceApplyRecordBo extends BaseEntity {
      */
     private Integer paymentMode;
 
+    /**
+     * 是否批量单：0-普通单 1-批次主单 2-批量子单
+     */
+    private Integer isBatch;
 
+    /**
+     * 所属批次单号（子单指向主单）
+     */
+    private String batchOrderNo;
 }

@@ -356,122 +356,98 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         resultPage.setRecords(salesList);
 
         return TableDataInfo.build(resultPage);
-//        // ================= 1. 获取基础数据篇 =================
-//        // 1.1 复用原生代码：查询产品基础【分页】数据 (仅发 1 条 SQL)
-//        var baseTableData = this.queryPageList(bo, pageQuery);
-//        var baseList = baseTableData.getRows();
-//
-//        if (CollUtil.isEmpty(baseList)) {
-//            return TableDataInfo.build(new ArrayList<>());
-//        }
-//
-//        // 1.2 转换类型为销售端 VO
-//        var salesList = MapstructUtils.convert(baseList, InsuranceSalesProductVo.class);
-//
-//        // 1.3 提取当页产品 ID 集合
-//        var productIds = salesList.stream()
-//            .map(InsuranceSalesProductVo::getId) // ⚠️ 如果你的产品ID字段不叫id，请改为 getProductId()
-//            .toList();
-//
-//        // 1.4 获取这批产品的【基础佣金费率】字典
-//        // (就是咱们之前写的极简版 getBatchRateMap，底层只发 1 条 SQL)
-//        var rateMap = insuranceProductCommissionService.getBatchRateMap(productIds);
-//
-//        // ================= 2. 准备两套“抽成比例套餐” =================
-//        // 查询机构佣金比例
-//        // 获取当前用户的顶层机构
-//        Long deptId = null;
-//        if (StpUtil.isLogin()){
-//            deptId = LoginHelper.getDeptId();
-//        }else {
-//            return null;
-//        }
-//
-//        Long topLevelDeptId = deptId; // 默认自己就是顶层
-//        SysDeptVo currentDept = sysDeptService.selectDeptById(deptId);
-//
-//        if (currentDept != null && StringUtils.isNotBlank(currentDept.getAncestors())) {
-//            String ancestors = currentDept.getAncestors(); // 例如："0,100,101"
-//            String[] ids = ancestors.split(",");
-//            // 按照 RuoYi 的规则，索引 1 的位置就是该租户下的最顶层机构
-//            if (ids.length > 1) {
-//                topLevelDeptId = Long.valueOf(ids[1]);
-//            }
-//        }
-//        BizCommissionDept bizCommissionDept = bizCommissionDeptService.queryByDeptId(topLevelDeptId);
-//        BigDecimal normalBizRatio = bizCommissionDept.getSalesRatio();
-//        BigDecimal normalTeamRatio = bizCommissionDept.getTeamRatio();
-//        BigDecimal normalLeaderRatio = bizCommissionDept.getProjectRatio();
-//        log.info("当前用户部门id：{}", deptId);
-//        log.info("当前用户顶层机构id：{}", topLevelDeptId);
-//        log.info("当前用户机构佣金下-业务负责人比例：{}", normalBizRatio);
-//        log.info("当前用户机构佣金下-团队负责人比例：{}", normalTeamRatio);
-//        log.info("当前用户机构佣金下-项目负责人比例：{}", normalLeaderRatio);
-//
-//        // 查询含有特殊佣金比例的产品
-//        Map<Long, BizCommissionProductVo> specialConfigMap = bizCommissionProductService.getBatchSpecialConfigs(productIds);
-//        // 提前判断当前登录用户的角色
-//        boolean isLeader = StpUtil.hasRole("leader");
-//        boolean isTeamLeader = StpUtil.hasRole("teamleader");
-//        boolean isBizMan = StpUtil.hasRole("bizman");
-//
-//        // ================= 3. 内存动态拼装与计算 =================
-//
-//        for (var vo : salesList) {
-//            // 获取这个产品的“基础总费率”
-//            var baseRate = rateMap.getOrDefault(vo.getId(), BigDecimal.ZERO);
-//
-//            // 🌟 核心判断 1：去 specialConfigMap 里找，看这个产品有没有配特殊比例？
-//            var specialConfig = specialConfigMap.get(vo.getId());
-//
-//            // 🌟 核心判断 2：动态决定当前这把计算用哪套比例
-//            BigDecimal currentBizRatio;
-//            BigDecimal currentTeamRatio;
-//            BigDecimal currentLeaderRatio;
-//
-//            if (specialConfig != null) {
-//                // 命中了特殊产品！采用特殊比例 (同样做防御性判空)
-//                currentBizRatio = specialConfig.getSalesRatio() != null ? specialConfig.getSalesRatio() : BigDecimal.ZERO;
-//                currentTeamRatio = specialConfig.getTeamRatio() != null ? specialConfig.getTeamRatio() : BigDecimal.ZERO;
-//                currentLeaderRatio = specialConfig.getProjectRatio() != null ? specialConfig.getProjectRatio() : BigDecimal.ZERO;
-//                log.info("命中了特殊产品！采用特殊比例：业务负责人={}, 团队负责人={}, 项目负责人={}",
-//                    currentBizRatio, currentTeamRatio, currentLeaderRatio);
-//            } else {
-//                // 没命中特殊产品，老老实实采用机构默认比例
-//                currentBizRatio = normalBizRatio;
-//                currentTeamRatio = normalTeamRatio;
-//                currentLeaderRatio = normalLeaderRatio;
-//            }
-//
-//            var finalDisplayRate = BigDecimal.ZERO;
-//
-//            // 🌟 核心计算：级差累加公式 (严格按职级从高到低往下兼容)
-//            if (isLeader) {
-//                // 项目负责人：吃满三层
-//                finalDisplayRate = baseRate.multiply(currentBizRatio)
-//                    .add(baseRate.multiply(currentTeamRatio))
-//                    .add(baseRate.multiply(currentLeaderRatio));
-//            } else if (isTeamLeader) {
-//                // 团队负责人：吃两层
-//                finalDisplayRate = baseRate.multiply(currentBizRatio)
-//                    .add(baseRate.multiply(currentTeamRatio));
-//            } else if (isBizMan) {
-//                // 业务负责人：只吃底层
-//                finalDisplayRate = baseRate.multiply(currentBizRatio);
-//            }
-//
-//            // 塞入最终费率给前端
-//            vo.setDisplayCommissionRate(finalDisplayRate);
-//        }
-//
-//        // ================= 4. 返回结果 =================
-//        var result = new TableDataInfo<InsuranceSalesProductVo>();
-//        result.setRows(salesList);
-//        result.setTotal(baseTableData.getTotal());
-//        result.setCode(200);
-//        result.setMsg("查询成功");
-//
-//        return result;
+    }
+
+    @Override
+    public InsuranceSalesProductVo querySalesProductById(Long productId) {
+        // 1. 先查询【租户自己的货架】确认产品是否上架
+        InsuranceTenantProduct tp = insuranceTenantProductMapper.selectOne(new LambdaQueryWrapper<InsuranceTenantProduct>()
+            .eq(InsuranceTenantProduct::getProductId, productId)
+            .eq(InsuranceTenantProduct::getStatus, "0"));
+
+        if (tp == null) {
+            return null;
+        }
+
+        // 2. 跨租户查【平台主库】获取基础信息
+        String platformTenantId = "000000";
+        InsuranceProductConfig baseProduct = TenantHelper.dynamic(platformTenantId, () -> baseMapper.selectById(productId));
+        if (baseProduct == null) {
+            return null;
+        }
+
+        // 3. 数据缝合与图片处理
+        InsuranceSalesProductVo vo = BeanUtil.copyProperties(baseProduct, InsuranceSalesProductVo.class);
+        vo.setId(baseProduct.getId());
+
+        if (StringUtils.isNotBlank(vo.getImgUrl())) {
+            // 支持单图/多图处理逻辑
+            String ossIdStr = vo.getImgUrl().split(",")[0];
+            if (StringUtils.isNumeric(ossIdStr)) {
+                SysOssVo oss = TenantHelper.dynamic(platformTenantId, () -> sysOssService.getById(Long.valueOf(ossIdStr)));
+                if (oss != null) {
+                    vo.setImgUrlUrl(oss.getUrl());
+                } else {
+                    vo.setImgUrlUrl(vo.getImgUrl());
+                }
+            }
+        }
+
+        // 4. 执行佣金计算逻辑 (保持与 querySalesPageList 一致)
+        List<Long> productIds = List.of(productId);
+        var rateMap = insuranceProductCommissionService.getBatchRateMap(productIds);
+
+        Long deptId = LoginHelper.getDeptId();
+        Long topLevelDeptId = deptId;
+        SysDeptVo currentDept = sysDeptService.selectDeptById(deptId);
+        if (currentDept != null && StringUtils.isNotBlank(currentDept.getAncestors())) {
+            String[] ids = currentDept.getAncestors().split(",");
+            if (ids.length > 1) {
+                topLevelDeptId = Long.valueOf(ids[1]);
+            }
+        }
+
+        BizCommissionDept bizCommissionDept = bizCommissionDeptService.queryByDeptId(topLevelDeptId);
+        BigDecimal normalBizRatio = bizCommissionDept != null && bizCommissionDept.getSalesRatio() != null ? bizCommissionDept.getSalesRatio() : BigDecimal.ZERO;
+        BigDecimal normalTeamRatio = bizCommissionDept != null && bizCommissionDept.getTeamRatio() != null ? bizCommissionDept.getTeamRatio() : BigDecimal.ZERO;
+        BigDecimal normalLeaderRatio = bizCommissionDept != null && bizCommissionDept.getProjectRatio() != null ? bizCommissionDept.getProjectRatio() : BigDecimal.ZERO;
+
+        Map<Long, BizCommissionProductVo> specialConfigMap = bizCommissionProductService.getBatchSpecialConfigs(productIds);
+        boolean isLeader = StpUtil.hasRole("leader");
+        boolean isTeamLeader = StpUtil.hasRole("teamleader");
+        boolean isBizMan = StpUtil.hasRole("bizman");
+
+        var baseRate = rateMap.getOrDefault(productId, BigDecimal.ZERO);
+        var specialConfig = specialConfigMap.get(productId);
+
+        BigDecimal currentBizRatio;
+        BigDecimal currentTeamRatio;
+        BigDecimal currentLeaderRatio;
+
+        if (specialConfig != null) {
+            currentBizRatio = specialConfig.getSalesRatio() != null ? specialConfig.getSalesRatio() : BigDecimal.ZERO;
+            currentTeamRatio = specialConfig.getTeamRatio() != null ? specialConfig.getTeamRatio() : BigDecimal.ZERO;
+            currentLeaderRatio = specialConfig.getProjectRatio() != null ? specialConfig.getProjectRatio() : BigDecimal.ZERO;
+        } else {
+            currentBizRatio = normalBizRatio;
+            currentTeamRatio = normalTeamRatio;
+            currentLeaderRatio = normalLeaderRatio;
+        }
+
+        var finalDisplayRate = BigDecimal.ZERO;
+        if (isLeader) {
+            finalDisplayRate = baseRate.multiply(currentBizRatio)
+                .add(baseRate.multiply(currentTeamRatio))
+                .add(baseRate.multiply(currentLeaderRatio));
+        } else if (isTeamLeader) {
+            finalDisplayRate = baseRate.multiply(currentBizRatio)
+                .add(baseRate.multiply(currentTeamRatio));
+        } else if (isBizMan) {
+            finalDisplayRate = baseRate.multiply(currentBizRatio);
+        }
+
+        vo.setDisplayCommissionRate(finalDisplayRate);
+        return vo;
     }
 
     @Override

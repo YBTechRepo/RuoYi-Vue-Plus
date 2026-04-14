@@ -38,7 +38,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 关联保单ID
      */
-    @ExcelProperty(value = "关联保单ID")
+    //@ExcelProperty(value = "关联保单ID")
     private Long policyId;
 
     /**
@@ -50,7 +50,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 产品ID
      */
-    @ExcelProperty(value = "产品ID")
+    //@ExcelProperty(value = "产品ID")
     private Long productId;
 
     /**
@@ -62,7 +62,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 业务员ID
      */
-    @ExcelProperty(value = "业务员ID")
+    //@ExcelProperty(value = "业务员ID")
     private Long salesUserId;
 
     /**
@@ -74,7 +74,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 团队长ID
      */
-    @ExcelProperty(value = "团队长ID")
+    //@ExcelProperty(value = "团队长ID")
     private Long teamUserId;
 
     /**
@@ -86,7 +86,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 总负责人ID
      */
-    @ExcelProperty(value = "总负责人ID")
+    //@ExcelProperty(value = "总负责人ID")
     private Long projectUserId;
 
     /**
@@ -180,7 +180,7 @@ public class BizCommissionRecordVo implements Serializable {
     /**
      * 总监津贴发放状态 (1-正常发放，2-净费已前置抵扣)
      */
-    @ExcelProperty(value = "总监津贴发放状态", converter = ExcelDictConvert.class)
+    @ExcelProperty(value = "总负责人津贴发放状态", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "commission_pay_status")
     private Integer projectStatus;
 

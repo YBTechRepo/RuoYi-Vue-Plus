@@ -85,6 +85,13 @@ public interface IInsuranceProductConfigService {
     TableDataInfo<InsuranceSalesProductVo> querySalesPageList(InsuranceProductConfigBo bo, PageQuery pageQuery);
 
     /**
+     * 销售端专属：查询单个产品详情（聚合了动态佣金费率）
+     * @param productId 产品ID
+     * @return 产品详情
+     */
+    InsuranceSalesProductVo querySalesProductById(Long productId);
+
+    /**
      * 查询授权产品
      */
     TableDataInfo<MarketProductVo> queryMarketPageList(InsuranceProductConfigBo bo, PageQuery pageQuery);

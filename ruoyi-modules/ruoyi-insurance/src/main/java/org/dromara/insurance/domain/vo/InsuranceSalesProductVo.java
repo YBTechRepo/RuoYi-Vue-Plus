@@ -100,4 +100,8 @@ public class InsuranceSalesProductVo {
     private Long tenantProductId;
 
     private String productFeatures;
+
+    private Integer paymentMode;
+
+    private Integer insureMode;
 }
