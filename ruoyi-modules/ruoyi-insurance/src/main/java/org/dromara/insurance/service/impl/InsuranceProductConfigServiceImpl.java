@@ -511,6 +511,42 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             throw new ServiceException("产品基础信息不能为空");
         }
 
+        // ================= 🌟 新增：服务费配置时间重叠校验 =================
+        if (StringUtils.isNotBlank(productBo.getServiceFeeConfig())) {
+            List<org.dromara.insurance.domain.bo.ServiceFeeConfig> configs = org.dromara.common.json.utils.JsonUtils.parseArray(productBo.getServiceFeeConfig(), org.dromara.insurance.domain.bo.ServiceFeeConfig.class);
+            if (CollUtil.isNotEmpty(configs)) {
+                // 过滤掉未设置生效时间的无效数据，并按生效时间升序排序
+                List<org.dromara.insurance.domain.bo.ServiceFeeConfig> sortedConfigs = configs.stream()
+                    .filter(c -> c.getEffectiveStartTime() != null)
+                    .sorted(Comparator.comparing(org.dromara.insurance.domain.bo.ServiceFeeConfig::getEffectiveStartTime))
+                    .collect(Collectors.toList());
+
+                // 校验时间段是否有交集
+                for (int i = 0; i < sortedConfigs.size() - 1; i++) {
+                    org.dromara.insurance.domain.bo.ServiceFeeConfig current = sortedConfigs.get(i);
+                    org.dromara.insurance.domain.bo.ServiceFeeConfig next = sortedConfigs.get(i + 1);
+
+                    // 如果当前配置没有失效时间(表示永久)，而后面还有新的生效配置，说明重叠了
+                    if (current.getEffectiveEndTime() == null) {
+                        throw new ServiceException("服务费配置的时间段存在重叠：配置了永久有效后，不能再添加后续时间段的配置");
+                    }
+
+                    // 正常的重叠：当前失效时间 > 后一个的生效时间 (允许等于，即 00:00:00 结束，下一个 00:00:00 开始)
+                    if (current.getEffectiveEndTime().after(next.getEffectiveStartTime())) {
+                        throw new ServiceException("服务费配置的时间段存在重叠，请检查配置项！");
+                    }
+                }
+                
+                // 校验自身时间逻辑：生效时间不能晚于失效时间
+                for (org.dromara.insurance.domain.bo.ServiceFeeConfig config : sortedConfigs) {
+                    if (config.getEffectiveEndTime() != null && config.getEffectiveStartTime().after(config.getEffectiveEndTime())) {
+                        throw new ServiceException("服务费配置有误：生效时间不能晚于失效时间！");
+                    }
+                }
+            }
+        }
+        // ===============================================================
+
         InsuranceProductConfig mainProduct = BeanUtil.copyProperties(productBo, InsuranceProductConfig.class);
 
         if (mainProduct.getId() == null) {

@@ -1,5 +1,7 @@
 package org.dromara.test;
 
+import cn.hutool.crypto.SecureUtil;
+import cn.hutool.crypto.asymmetric.RSA;
 import org.dromara.common.web.config.properties.CaptchaProperties;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +67,13 @@ public class DemoUnitTest {
     @AfterAll
     public static void testAfterAll() {
         System.out.println("@AfterAll ==================");
+    }
+
+    @Test
+    public void test001(){
+        RSA rsa = SecureUtil.rsa();
+        System.out.println(rsa.getPrivateKeyBase64());
+        System.out.println(rsa.getPublicKeyBase64());
     }
 
 }

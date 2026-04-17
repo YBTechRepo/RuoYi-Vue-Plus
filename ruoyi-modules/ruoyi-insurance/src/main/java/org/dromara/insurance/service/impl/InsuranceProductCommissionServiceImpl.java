@@ -119,7 +119,39 @@ public class InsuranceProductCommissionServiceImpl implements IInsuranceProductC
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(InsuranceProductCommission entity){
-        //TODO 做一些数据校验,如唯一约束
+        if (StringUtils.isNotBlank(entity.getCommissionConfig())) {
+            List<ProductCommissionConfig> configs = JsonUtils.parseArray(entity.getCommissionConfig(), ProductCommissionConfig.class);
+            if (CollUtil.isNotEmpty(configs)) {
+                // 过滤掉所有未设置生效时间的无效数据，并按生效时间升序排序
+                List<ProductCommissionConfig> sortedConfigs = configs.stream()
+                    .filter(c -> c.getEffectiveTime() != null)
+                    .sorted(Comparator.comparing(ProductCommissionConfig::getEffectiveTime))
+                    .collect(Collectors.toList());
+
+                // 校验时间段是否有交集
+                for (int i = 0; i < sortedConfigs.size() - 1; i++) {
+                    ProductCommissionConfig current = sortedConfigs.get(i);
+                    ProductCommissionConfig next = sortedConfigs.get(i + 1);
+
+                    // 如果当前配置没有失效时间(表示永久)，而后面还有新的生效配置，说明重叠了
+                    if (current.getExpirationTime() == null) {
+                        throw new org.dromara.common.core.exception.ServiceException("佣金配置的时间段存在重叠：配置了永久有效后，不能再添加后续时间段的配置");
+                    }
+
+                    // 正常的重叠：当前失效时间 > 后一个的生效时间 (允许等于，即 00:00:00 结束，下一个 00:00:00 开始)
+                    if (current.getExpirationTime().after(next.getEffectiveTime())) {
+                        throw new org.dromara.common.core.exception.ServiceException("佣金配置的时间段存在重叠，请检查配置项！");
+                    }
+                }
+                
+                // 校验自身时间逻辑：生效时间不能晚于失效时间
+                for (ProductCommissionConfig config : sortedConfigs) {
+                    if (config.getExpirationTime() != null && config.getEffectiveTime().after(config.getExpirationTime())) {
+                        throw new org.dromara.common.core.exception.ServiceException("佣金配置有误：生效时间不能晚于失效时间！");
+                    }
+                }
+            }
+        }
     }
 
     /**

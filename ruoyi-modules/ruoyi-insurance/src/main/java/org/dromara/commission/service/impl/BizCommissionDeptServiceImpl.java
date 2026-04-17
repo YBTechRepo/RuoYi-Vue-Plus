@@ -16,6 +16,7 @@ import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.mapper.BizCommissionDeptMapper;
 import org.dromara.commission.service.IBizCommissionDeptService;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
@@ -115,7 +116,49 @@ public class BizCommissionDeptServiceImpl implements IBizCommissionDeptService {
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(BizCommissionDept entity){
-        //TODO 做一些数据校验,如唯一约束
+        if (entity.getDeptId() == null) {
+            throw new org.dromara.common.core.exception.ServiceException("机构部门不能为空！");
+        }
+        if (entity.getEffectiveStart() == null) {
+            throw new org.dromara.common.core.exception.ServiceException("生效开始时间不能为空！");
+        }
+        if (entity.getEffectiveEnd() != null && entity.getEffectiveStart().after(entity.getEffectiveEnd())) {
+            throw new org.dromara.common.core.exception.ServiceException("生效开始时间不能晚于结束时间！");
+        }
+
+        // 查询数据库中该部门已有的费率配置 (排除自己)
+        LambdaQueryWrapper<BizCommissionDept> lqw = Wrappers.lambdaQuery();
+        lqw.eq(BizCommissionDept::getDeptId, entity.getDeptId());
+        if (entity.getId() != null) {
+            lqw.ne(BizCommissionDept::getId, entity.getId());
+        }
+        
+        List<BizCommissionDept> existList = baseMapper.selectList(lqw);
+        
+        Date newStart = entity.getEffectiveStart();
+        Date newEnd = entity.getEffectiveEnd();
+        
+        for (BizCommissionDept exist : existList) {
+            Date existStart = exist.getEffectiveStart();
+            Date existEnd = exist.getEffectiveEnd();
+            
+            // 判断两个时间段 [newStart, newEnd] 和 [existStart, existEnd] 是否存在重叠
+            // 不重叠的条件是：一个的结束时间 <= 另一个的开始时间
+            boolean isNotOverlap = false;
+            
+            // 情况1：新配置的结束时间早于(或等于)已有配置的开始时间
+            if (newEnd != null && existStart != null && !newEnd.after(existStart)) {
+                isNotOverlap = true;
+            }
+            // 情况2：已有配置的结束时间早于(或等于)新配置的开始时间
+            else if (existEnd != null && newStart != null && !existEnd.after(newStart)) {
+                isNotOverlap = true;
+            }
+            
+            if (!isNotOverlap) {
+                throw new org.dromara.common.core.exception.ServiceException("该机构在该时间段内已存在费率配置，请检查生效时间，避免时间段重叠！");
+            }
+        }
     }
 
     /**
