@@ -480,10 +480,12 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             InsuranceApplyRecordVo recordVo = MapstructUtils.convert(record, InsuranceApplyRecordVo.class);
             CalcCommission calcParam = buildCalcParam(recordVo);
 
-            // 🌟 将支付方式、真实的付款人以及实际支付保费传给下游！
+            // 🌟 将支付方式、真实的付款人以及保单保费传给下游！
             calcParam.setPaymentMode(record.getPaymentMode());
             calcParam.setPayerUserId(LoginHelper.getUserId());
-            calcParam.setPolicyPremium(actualAmount);
+            calcParam.setPolicyPremium(record.getPremium());
+
+            log.info("佣金计算参数：{}",JsonUtils.toJsonString(calcParam));
 
             applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
             log.info("余额支付成功，已异步抛出佣金计算事件，单号：{}", orderNo);
@@ -787,7 +789,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             // 🌟 补充主单特有信息 (按照 payWithBalance 方式)
             calcParam.setPaymentMode(mainOrder.getPaymentMode());
             calcParam.setPayerUserId(currentUserId);
-            calcParam.setPolicyPremium(totalNetPremium); // 使用实际扣除的总净费计算
+            calcParam.setPolicyPremium(totalGrossPremium); // 使用总保单保费计算
 
             applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
             log.info("批次主单 {} 佣金计算事件已触发", batchOrderNo);

@@ -167,11 +167,16 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             throw new ServiceException("产品基础佣金费率不在有效期内");
         }
         BigDecimal totalCommission = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
+        log.info("保单号："+calcCommission.getPolicyNo()+",保单保费："+calcCommission.getPolicyPremium()+"，佣金计算基数为："+totalCommission);
 
         // ================= 2. 尝试匹配特殊产品佣金费率 =================
         BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, tenantId);
         if (specialProduct != null && Objects.equals(0, specialProduct.getStatus())
             && isEffective(now, specialProduct.getEffectiveStart(), specialProduct.getEffectiveEnd())) {
+            log.info("保单号："+calcCommission.getPolicyNo()+"匹配特殊产品佣金");
+            log.info("业务员佣金比例：{}",specialProduct.getSalesRatio());
+            log.info("团队佣金比例：{}",specialProduct.getTeamRatio());
+            log.info("机构佣金比例：{}",specialProduct.getProjectRatio());
             // 🌟 传入 paymentMode 和 payerUserId (直接从 calcCommission 取即可)
             calculateAndSaveRecord(calcCommission, totalCommission,
                 specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
@@ -193,6 +198,10 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         if (deptCommission != null && Objects.equals(0, deptCommission.getStatus())
             && isEffective(now, deptCommission.getEffectiveStart(), deptCommission.getEffectiveEnd())) {
             // 🌟 传入 paymentMode 和 payerUserId
+            log.info("保单号："+calcCommission.getPolicyNo()+"匹配机构比例");
+            log.info("业务员佣金比例：{}",deptCommission.getSalesRatio());
+            log.info("团队佣金比例：{}",deptCommission.getTeamRatio());
+            log.info("机构佣金比例：{}",deptCommission.getProjectRatio());
             calculateAndSaveRecord(calcCommission, totalCommission,
                 deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
             return;
@@ -209,6 +218,9 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
         BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
         BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        log.info("保单号："+calcCommission.getPolicyNo()+"，业务员佣金："+salesCommission);
+        log.info("保单号："+calcCommission.getPolicyNo()+"，团队佣金："+teamCommission);
+        log.info("保单号："+calcCommission.getPolicyNo()+"，机构佣金："+projectCommission);
 
         // 🌟 2. 身份校验与抵扣判定
         // 1: 正常佣金(待发放/待结算)   2: 净费出单已抵扣(不需要发钱，前端不显示)

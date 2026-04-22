@@ -190,17 +190,53 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
     @Override
     public TableDataInfo<InsuranceSalesProductVo> querySalesPageList(InsuranceProductConfigBo bo, PageQuery pageQuery) {
+        //log.error("【DEBUG】querySalesPageList params: bo={}, pageQuery={}", org.dromara.common.json.utils.JsonUtils.toJsonString(bo), org.dromara.common.json.utils.JsonUtils.toJsonString(pageQuery));
+        // ================= 0. 如果 bo 带有基础表的查询条件，先去主库过滤出 productId =================
+        boolean hasFilter = StringUtils.isNotBlank(bo.getProductName()) ||
+                            StringUtils.isNotBlank(bo.getCompanyCode()) ||
+                            StringUtils.isNotBlank(bo.getProductType()) ||
+                            bo.getProductMode() != null;
+
+        List<Long> filterProductIds = null;
+        if (hasFilter) {
+            filterProductIds = TenantHelper.dynamic("000000", () -> {
+                LambdaQueryWrapper<InsuranceProductConfig> filterLqw = Wrappers.lambdaQuery();
+                filterLqw.eq(bo.getProductMode() != null, InsuranceProductConfig::getProductMode, bo.getProductMode());
+                filterLqw.like(StringUtils.isNotBlank(bo.getProductName()), InsuranceProductConfig::getProductName, bo.getProductName());
+                filterLqw.eq(StringUtils.isNotBlank(bo.getCompanyCode()), InsuranceProductConfig::getCompanyCode, bo.getCompanyCode());
+                filterLqw.eq(StringUtils.isNotBlank(bo.getProductType()), InsuranceProductConfig::getProductType, bo.getProductType());
+                filterLqw.select(InsuranceProductConfig::getId);
+
+                List<Object> objs = baseMapper.selectObjs(filterLqw);
+                return objs.stream().map(obj -> (Long) obj).collect(Collectors.toList());
+            });
+
+            //log.error("【DEBUG】hasFilter is true, filterProductIds: {}", filterProductIds);
+            // 如果带了条件，但是在平台库中没找到匹配的，直接返回空
+            if (CollUtil.isEmpty(filterProductIds)) {
+                return TableDataInfo.build(new Page<>());
+            }
+        }
+
         // ================= 1. 先分页查询【租户自己的货架】 =================
         // 底层拦截器会自动加上 tenant_id = 当前登录人租户ID
         LambdaQueryWrapper<InsuranceTenantProduct> tenantLqw = new LambdaQueryWrapper<>();
         // 🌟 核心过滤：只查该租户自己设置为“上架(0)”的产品
         tenantLqw.eq(InsuranceTenantProduct::getStatus, "0");
+
+        // 🌟 拼装前置的基础表过滤条件
+        if (CollUtil.isNotEmpty(filterProductIds)) {
+            tenantLqw.in(InsuranceTenantProduct::getProductId, filterProductIds);
+        }
+
         // 按照租户自定义的排序号和添加时间排序
         tenantLqw.orderByAsc(InsuranceTenantProduct::getSort).orderByDesc(InsuranceTenantProduct::getCreateTime);
 
         // 发起分页查询
         Page<InsuranceTenantProduct> tenantPage = insuranceTenantProductMapper.selectPage(pageQuery.build(), tenantLqw);
         List<InsuranceTenantProduct> tenantProducts = tenantPage.getRecords();
+
+        //log.error("【DEBUG】tenantProducts size: {}", tenantProducts.size());
 
         // 如果货架是空的，直接返回空列表
         if (CollUtil.isEmpty(tenantProducts)) {
@@ -211,16 +247,14 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         List<Long> productIds = tenantProducts.stream()
             .map(InsuranceTenantProduct::getProductId)
             .toList();
-
-//        List<Long> tenantProductIds = tenantProducts.stream()
-//            .map(InsuranceTenantProduct::getId)
-//            .toList();
+        //log.error("【DEBUG】productIds extracted from tenantProducts: {}", productIds);
 
         // 开启霸体！去平台租户(000000)获取这些产品的名字、图片等真实信息
         String platformTenantId = "000000";
         List<InsuranceProductConfig> baseProducts = TenantHelper.dynamic(platformTenantId, () -> {
             return baseMapper.selectBatchIds(productIds);
         });
+        //log.error("【DEBUG】baseProducts fetched: {}", baseProducts.size());
 
         // ================= 🌟 新增：独立、统一的 OSS 图片处理逻辑 =================
 
@@ -255,10 +289,22 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
         // ================= 3. 数据缝合，转换为销售端 VO =================
         // 第三步：在转换 VO 时，从上面的 Map 里精准取值进行缝合
+
+        // 当前用户id
+        String rawLoginId = StpUtil.getLoginIdAsString();
+        String idStr = rawLoginId.contains(":") ? rawLoginId.substring(rawLoginId.lastIndexOf(":") + 1) : rawLoginId;
+        Long currentUserId = Long.valueOf(idStr);
+
         List<InsuranceSalesProductVo> salesList = new ArrayList<>();
         for (InsuranceTenantProduct tp : tenantProducts) {
             InsuranceProductConfig baseProduct = baseProductMap.get(tp.getProductId());
             if (baseProduct != null) {
+                //替换链接参数
+                if(baseProduct.getProductMode() != null && baseProduct.getProductMode() == 2) {
+                    String newUrl = baseProduct.getProposalUrl() != null ? baseProduct.getProposalUrl().replace("$agentCode$", "KD" + currentUserId) : null;
+                    baseProduct.setProposalUrl(newUrl);
+                }
+
                 // 1. 拷贝基础属性
                 InsuranceSalesProductVo vo = BeanUtil.copyProperties(baseProduct, InsuranceSalesProductVo.class);
                 vo.setId(baseProduct.getId());
@@ -276,11 +322,13 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                         vo.setImgUrlUrl(vo.getImgUrl());
                     }
                 }
-
                 salesList.add(vo);
+            } else {
+                //log.error("【DEBUG】baseProduct is null for productId: {}", tp.getProductId());
             }
         }
 
+        //log.error("【DEBUG】salesList size after mapping: {}", salesList.size());
         // ================= 4. 执行佣金计算逻辑 (你的原生优秀逻辑) =================
         // 4.1 获取这批产品的【基础佣金费率】字典
         var rateMap = insuranceProductCommissionService.getBatchRateMap(productIds);
@@ -357,6 +405,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
         return TableDataInfo.build(resultPage);
     }
+
 
     @Override
     public InsuranceSalesProductVo querySalesProductById(Long productId) {
@@ -536,7 +585,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                         throw new ServiceException("服务费配置的时间段存在重叠，请检查配置项！");
                     }
                 }
-                
+
                 // 校验自身时间逻辑：生效时间不能晚于失效时间
                 for (org.dromara.insurance.domain.bo.ServiceFeeConfig config : sortedConfigs) {
                     if (config.getEffectiveEndTime() != null && config.getEffectiveStartTime().after(config.getEffectiveEndTime())) {
