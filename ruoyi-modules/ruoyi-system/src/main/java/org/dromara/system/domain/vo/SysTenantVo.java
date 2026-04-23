@@ -112,4 +112,18 @@ public class SysTenantVo implements Serializable {
     private String status;
 
 
+    /**
+     * 机构负责人姓名
+     */
+    private String leaderName;
+
+    /**
+     * 机构负责人手机号
+     */
+    private String leaderPhone;
+
+    /**
+     * 角色模板ID
+     */
+    private Long roleTemplateId;
 }

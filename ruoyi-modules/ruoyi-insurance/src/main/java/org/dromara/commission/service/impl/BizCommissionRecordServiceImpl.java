@@ -260,57 +260,6 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             calcCommission.getPolicyNo(), salesStatus, teamStatus, projectStatus);
     }
 
-//    @Override
-//    @Transactional(rollbackFor = Exception.class)
-//    public void calcCommission(CalcCommission calcCommission) {
-//        // 🌟 这里的 ID 现在是 100% 纯正的系统产品 ID
-//        Long productId = calcCommission.getProductId();
-//        String tenantId = calcCommission.getTenantId();
-//        Date now = new Date();
-//
-//        // ================= 1. 查询并校验产品基础佣金费率 =================
-//        InsuranceProductCommission productBase = insuranceProductCommissionService.queryByProductIdAndTenantId(productId, tenantId);
-//
-//        if (productBase == null || !Objects.equals(0, productBase.getStatus())) {
-//            throw new ServiceException("产品基础佣金费率不存在或未启用");
-//        }
-//        if (!isEffective(now, productBase.getEffectiveTime(), productBase.getExpirationTime())) {
-//            throw new ServiceException("产品基础佣金费率不在有效期内");
-//        }
-//        BigDecimal totalCommission = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
-//
-//        // ================= 2. 尝试匹配特殊产品佣金费率 =================
-//        BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, tenantId);
-//        if (specialProduct != null && Objects.equals(0, specialProduct.getStatus())
-//            && isEffective(now, specialProduct.getEffectiveStart(), specialProduct.getEffectiveEnd())) {
-//            calculateAndSaveRecord(calcCommission, totalCommission,
-//                specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
-//            return;
-//        }
-//
-//        // ================= 3. 尝试匹配机构佣金费率 (向上寻根逻辑) =================
-//        Long topLevelDeptId = calcCommission.getCreateDeptId();
-//        SysDeptVo currentSalesDept = sysDeptService.selectDeptById(topLevelDeptId);
-//
-//        if (currentSalesDept != null && StringUtils.isNotBlank(currentSalesDept.getAncestors())) {
-//            String[] ids = currentSalesDept.getAncestors().split(",");
-//            if (ids.length > 1) {
-//                topLevelDeptId = Long.valueOf(ids[1]);
-//            }
-//        }
-//
-//        BizCommissionDept deptCommission = bizCommissionDeptService.queryByDeptIdAndTenantId(topLevelDeptId, tenantId);
-//        if (deptCommission != null && Objects.equals(0, deptCommission.getStatus())
-//            && isEffective(now, deptCommission.getEffectiveStart(), deptCommission.getEffectiveEnd())) {
-//            calculateAndSaveRecord(calcCommission, totalCommission,
-//                deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
-//            return;
-//        }
-//
-//        // ================= 4. 兜底处理 =================
-//        throw new ServiceException("未找到匹配且有效的佣金计算策略");
-//    }
-
     @Override
     public CommissionSummaryVo getAppCommissionSummary(Long userId, String queryMonth) {
         // 直接调用 Mapper 里的聚合 SQL
@@ -335,32 +284,6 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         return TableDataInfo.build(page);
     }
 
-//    /**
-//     * 计算并保存记录 (修复财务计算 Bug)
-//     */
-//    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
-//                                        BigDecimal sRatio, BigDecimal tRatio, BigDecimal pRatio, Integer strategy) {
-//
-//        // 🌟 修复：必须全部使用乘法，并保留 2 位小数，防止精度丢失和截留平台利润
-//        BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-//        BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-//        BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-//
-//        InsertCommission param = new InsertCommission();
-//        param.setCalcCommission(calcCommission);
-//        param.setTotalCommission(totalCommission);
-//        param.setSalesCommission(salesCommission);
-//        param.setTeamCommission(teamCommission);
-//        param.setProjectCommission(projectCommission);
-//        // ... 保存比例等基础信息
-//        param.setSalesRatio(sRatio);
-//        param.setTeamRatio(tRatio);
-//        param.setProjectRatio(pRatio);
-//        param.setCalcStrategy(strategy);
-//
-//        insertCommissionRecord(param);
-//    }
-
     /**
      * 校验时间是否在有效期内 (包含边界)
      */
@@ -383,6 +306,9 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         recordBo.setPolicyId(cc.getPolicyId());
         recordBo.setPolicyNo(cc.getPolicyNo());
         recordBo.setProductId(cc.getProductId());
+        recordBo.setProductName(cc.getProductName());
+        // 🌟 将实交保费赋给记录的 premium 字段 (如果净费为空则兜底取原价)
+        recordBo.setPremium(cc.getNetPremium() != null ? cc.getNetPremium() : cc.getPolicyPremium());
         recordBo.setCommissionBase(param.getTotalCommission());
         recordBo.setSalesUserId(salesUserId);
         recordBo.setTeamUserId(teamUserId);

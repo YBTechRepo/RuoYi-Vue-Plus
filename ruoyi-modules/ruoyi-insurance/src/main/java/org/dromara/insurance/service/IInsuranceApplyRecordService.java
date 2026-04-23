@@ -106,4 +106,9 @@ public interface IInsuranceApplyRecordService {
      * 批量投保：生成主单 + 子单 + 投被保人记录
      */
     String submitBatch(BatchSubmitDTO submitDTO);
+
+    /**
+     * 移动端取消订单
+     */
+    Boolean cancelOrder(InsuranceApplyRecordBo bo);
 }

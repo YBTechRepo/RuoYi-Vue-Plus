@@ -73,7 +73,7 @@ public class InsuranceApplyRecordController extends BaseController {
     public R<List<java.util.Map<String, Object>>> subOrders(@NotBlank(message = "批次单号不能为空") String batchOrderNo) {
         return R.ok(insuranceApplyRecordService.querySubOrders(batchOrderNo));
     }
-    
+
     /**
      * 个人详情 (投被保人信息)
      */
@@ -170,4 +170,16 @@ public class InsuranceApplyRecordController extends BaseController {
         log.info("payWithBalanceReqDTO：{}",payWithBalanceReqDTO);
         return toAjax(insuranceApplyRecordService.payWithBalance(payWithBalanceReqDTO));
     }
+
+    /**
+     * 移动端取消订单
+     */
+    @SaCheckLogin
+    @RepeatSubmit()
+    @PostMapping("/cancelOrder")
+    public R<Void> cancelOrder(@RequestBody InsuranceApplyRecordBo bo) {
+        log.info("移动端请求取消订单：{}", JsonUtils.toJsonString(bo));
+        return toAjax(insuranceApplyRecordService.cancelOrder(bo));
+    }
+
 }

@@ -174,8 +174,10 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             // ================= 4. 锁定数据底层归属权 =================
             calcParam.setPolicyNo(policyNo);
             calcParam.setProductId(product.getId());
+            calcParam.setProductName(product.getProductName());
             calcParam.setTenantId(tenantId);
             calcParam.setPolicyPremium(new BigDecimal(policyDto.getPrem()));
+            calcParam.setNetPremium(new BigDecimal(policyDto.getPrem())); // 常规保单实交保费等于原价
 
             // 🌟 强行将佣金参数的创建人和部门，锚定为该业务员！
             // 配合咱们刚才写的 calcCommission 里的 recordBo.setCreateBy(...)，佣金记录就完美隔离了

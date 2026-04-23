@@ -9,6 +9,7 @@ import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.constant.Constants;
@@ -20,6 +21,7 @@ import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.redis.utils.CacheUtils;
@@ -36,6 +38,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 租户Service业务层处理
@@ -57,6 +60,15 @@ public class SysTenantServiceImpl implements ISysTenantService {
     private final SysDictTypeMapper dictTypeMapper;
     private final SysDictDataMapper dictDataMapper;
     private final SysConfigMapper configMapper;
+    private final SysRoleTemplateMapper roleTemplateMapper;
+
+    @Data
+    public static class RoleTemplateDTO {
+        private String roleName;
+        private String roleKey;
+        private List<Long> menuIds;
+        private Integer sort;
+    }
 
     /**
      * 查询租户
@@ -134,22 +146,41 @@ public class SysTenantServiceImpl implements ISysTenantService {
         bo.setId(add.getId());
 
         // 根据套餐创建角色
-        Long roleId = createTenantRole(tenantId, bo.getPackageId());
+        Map<String, Long> roleIdMap = createTenantRolesWithTemplate(tenantId, bo.getPackageId(), bo.getRoleTemplateId());
+        Long adminRoleId = roleIdMap.get(TenantConstants.TENANT_ADMIN_ROLE_KEY);
 
         // 创建部门: 公司名是部门名称
         SysDept dept = new SysDept();
         dept.setTenantId(tenantId);
+        dept.setDeptCategory("1");
         dept.setDeptName(bo.getCompanyName());
         dept.setParentId(Constants.TOP_PARENT_ID);
         dept.setAncestors(Constants.TOP_PARENT_ID.toString());
         deptMapper.insert(dept);
         Long deptId = dept.getDeptId();
 
+        //默认团队
+        SysDept team = new SysDept();
+        team.setTenantId(tenantId);
+        team.setDeptCategory("2");
+        team.setDeptName("团队");
+        team.setParentId(deptId);
+        team.setAncestors(Constants.TOP_PARENT_ID+","+deptId);
+        deptMapper.insert(team);
+
         // 角色和部门关联表
         SysRoleDept roleDept = new SysRoleDept();
-        roleDept.setRoleId(roleId);
+        roleDept.setRoleId(adminRoleId);
         roleDept.setDeptId(deptId);
         roleDeptMapper.insert(roleDept);
+
+        Long leaderRoleId = roleIdMap.get("leader");
+        if (leaderRoleId != null) {
+            SysRoleDept leaderRoleDept = new SysRoleDept();
+            leaderRoleDept.setRoleId(leaderRoleId);
+            leaderRoleDept.setDeptId(deptId);
+            roleDeptMapper.insert(leaderRoleDept);
+        }
 
         // 创建系统用户
         SysUser user = new SysUser();
@@ -158,7 +189,7 @@ public class SysTenantServiceImpl implements ISysTenantService {
         user.setNickName(bo.getUsername());
         user.setPassword(BCrypt.hashpw(bo.getPassword()));
         user.setDeptId(deptId);
-        user.setPhonenumber(bo.getContactPhone());
+        user.setPhonenumber("admin_"+bo.getContactPhone());
         userMapper.insert(user);
         //新增系统用户后，默认当前用户为部门的负责人
         SysDept sd = new SysDept();
@@ -169,8 +200,27 @@ public class SysTenantServiceImpl implements ISysTenantService {
         // 用户和角色关联表
         SysUserRole userRole = new SysUserRole();
         userRole.setUserId(user.getUserId());
-        userRole.setRoleId(roleId);
+        userRole.setRoleId(adminRoleId);
         userRoleMapper.insert(userRole);
+
+        // 创建 leader 用户
+        if (StringUtils.isNotBlank(bo.getLeaderName()) && StringUtils.isNotBlank(bo.getLeaderPhone()) && StringUtils.isNotBlank(bo.getLeaderPassword())) {
+            SysUser leaderUser = new SysUser();
+            leaderUser.setTenantId(tenantId);
+            leaderUser.setUserName(bo.getLeaderPhone()); // 手机号作为账号
+            leaderUser.setNickName(bo.getLeaderName());
+            leaderUser.setPassword(BCrypt.hashpw(bo.getLeaderPassword()));
+            leaderUser.setDeptId(deptId);
+            leaderUser.setPhonenumber(bo.getLeaderPhone());
+            userMapper.insert(leaderUser);
+
+            if (leaderRoleId != null) {
+                SysUserRole leaderUserRole = new SysUserRole();
+                leaderUserRole.setUserId(leaderUser.getUserId());
+                leaderUserRole.setRoleId(leaderRoleId);
+                userRoleMapper.insert(leaderUserRole);
+            }
+        }
 
         String defaultTenantId = TenantConstants.DEFAULT_TENANT_ID;
         List<SysDictType> dictTypeList = dictTypeMapper.selectList(
@@ -241,28 +291,65 @@ public class SysTenantServiceImpl implements ISysTenantService {
      *
      * @param tenantId  租户编号
      * @param packageId 租户套餐id
-     * @return 角色id
+     * @return 角色集合
      */
-    private Long createTenantRole(String tenantId, Long packageId) {
+    private Map<String, Long> createTenantRolesWithTemplate(String tenantId, Long packageId, Long templateId) {
+        Map<String, Long> roleIdMap = new HashMap<>();
+
         // 获取租户套餐
         SysTenantPackage tenantPackage = tenantPackageMapper.selectById(packageId);
         if (ObjectUtil.isNull(tenantPackage)) {
             throw new ServiceException("套餐不存在");
         }
         // 获取套餐菜单id
-        List<Long> menuIds = StringUtils.splitTo(tenantPackage.getMenuIds(), Convert::toLong);
+        List<Long> packageMenuIds = StringUtils.splitTo(tenantPackage.getMenuIds(), Convert::toLong);
 
-        // 创建角色
-        SysRole role = new SysRole();
-        role.setTenantId(tenantId);
-        role.setRoleName(TenantConstants.TENANT_ADMIN_ROLE_NAME);
-        role.setRoleKey(TenantConstants.TENANT_ADMIN_ROLE_KEY);
-        role.setRoleSort(1);
-        role.setStatus(SystemConstants.NORMAL);
-        roleMapper.insert(role);
-        Long roleId = role.getRoleId();
+        // 创建管理员角色
+        SysRole adminRole = new SysRole();
+        adminRole.setTenantId(tenantId);
+        adminRole.setRoleName(TenantConstants.TENANT_ADMIN_ROLE_NAME);
+        adminRole.setRoleKey(TenantConstants.TENANT_ADMIN_ROLE_KEY);
+        adminRole.setRoleSort(1);
+        adminRole.setStatus(SystemConstants.NORMAL);
+        roleMapper.insert(adminRole);
+        Long adminRoleId = adminRole.getRoleId();
+        roleIdMap.put(adminRole.getRoleKey(), adminRoleId);
 
-        // 创建角色菜单
+        // 创建管理员角色菜单
+        insertRoleMenus(adminRoleId, packageMenuIds);
+
+        // 创建模板附属角色
+        if (templateId != null) {
+            SysRoleTemplate template = roleTemplateMapper.selectById(templateId);
+            if (template != null && StringUtils.isNotBlank(template.getRolesJson())) {
+                List<RoleTemplateDTO> tplRoles = JsonUtils.parseArray(template.getRolesJson(), RoleTemplateDTO.class);
+                if (CollUtil.isNotEmpty(tplRoles)) {
+                    for (RoleTemplateDTO tpl : tplRoles) {
+                        SysRole subRole = new SysRole();
+                        subRole.setTenantId(tenantId);
+                        subRole.setRoleName(tpl.getRoleName());
+                        subRole.setRoleKey(tpl.getRoleKey());
+                        subRole.setRoleSort(tpl.getSort() != null ? tpl.getSort() : 2);
+                        subRole.setStatus(SystemConstants.NORMAL);
+                        roleMapper.insert(subRole);
+                        roleIdMap.put(subRole.getRoleKey(), subRole.getRoleId());
+
+                        if (CollUtil.isNotEmpty(tpl.getMenuIds())) {
+                            List<Long> safeMenuIds = tpl.getMenuIds().stream()
+                                    .filter(packageMenuIds::contains)
+                                    .collect(Collectors.toList());
+                            insertRoleMenus(subRole.getRoleId(), safeMenuIds);
+                        }
+                    }
+                }
+            }
+        }
+
+        return roleIdMap;
+    }
+
+    private void insertRoleMenus(Long roleId, List<Long> menuIds) {
+        if (CollUtil.isEmpty(menuIds)) return;
         List<SysRoleMenu> roleMenus = new ArrayList<>(menuIds.size());
         menuIds.forEach(menuId -> {
             SysRoleMenu roleMenu = new SysRoleMenu();
@@ -271,8 +358,6 @@ public class SysTenantServiceImpl implements ISysTenantService {
             roleMenus.add(roleMenu);
         });
         roleMenuMapper.insertBatch(roleMenus);
-
-        return roleId;
     }
 
     /**

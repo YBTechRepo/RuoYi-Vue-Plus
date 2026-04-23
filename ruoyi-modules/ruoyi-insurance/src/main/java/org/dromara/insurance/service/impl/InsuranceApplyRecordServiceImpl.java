@@ -1,5 +1,6 @@
 package org.dromara.insurance.service.impl;
 
+import org.dromara.common.tenant.helper.TenantHelper;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
 import org.dromara.commission.domain.BizCommissionDept;
@@ -159,26 +160,29 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             return result;
         }
 
-        List<InsuranceApplyRecord> subOrders = baseMapper.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
-            .eq(InsuranceApplyRecord::getBatchOrderNo, batchOrderNo)
-            .eq(InsuranceApplyRecord::getIsBatch, 2)
-            .orderByAsc(InsuranceApplyRecord::getId));
+        TenantHelper.ignore(() -> {
+            List<InsuranceApplyRecord> subOrders = baseMapper.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                .eq(InsuranceApplyRecord::getBatchOrderNo, batchOrderNo)
+                .eq(InsuranceApplyRecord::getIsBatch, 2)
+                .orderByAsc(InsuranceApplyRecord::getId));
 
-        for (InsuranceApplyRecord subOrder : subOrders) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("orderNo", subOrder.getOrderNo());
-            map.put("status", subOrder.getStatus());
+            for (InsuranceApplyRecord subOrder : subOrders) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("orderNo", subOrder.getOrderNo());
+                map.put("status", subOrder.getStatus());
 
-            InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
-                .eq(InsuranceOrderApplicant::getOrderNo, subOrder.getOrderNo()));
-            map.put("appName", applicant != null ? applicant.getApplicantName() : "");
+                InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+                    .eq(InsuranceOrderApplicant::getOrderNo, subOrder.getOrderNo()));
+                map.put("appName", applicant != null ? applicant.getApplicantName() : "");
 
-            InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
-                .eq(InsuranceOrderInsured::getOrderNo, subOrder.getOrderNo()));
-            map.put("insuredName", insured != null ? insured.getInsuredName() : "");
+                InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+                    .eq(InsuranceOrderInsured::getOrderNo, subOrder.getOrderNo()));
+                map.put("insuredName", insured != null ? insured.getInsuredName() : "");
 
-            result.add(map);
-        }
+                result.add(map);
+            }
+        });
+
         return result;
     }
 
@@ -191,26 +195,28 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
         result.put("orderNo", orderNo);
 
-        InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
-            .eq(InsuranceOrderApplicant::getOrderNo, orderNo));
-        if (applicant != null) {
-            result.put("appName", applicant.getApplicantName());
-            result.put("appPhone", applicant.getApplicantPhone());
-            result.put("appCertType", applicant.getApplicantCertType());
-            result.put("appCertNo", applicant.getApplicantCertNo());
-            result.put("appAddress", applicant.getApplicantAddress());
-        }
+        TenantHelper.ignore(() -> {
+            InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+                .eq(InsuranceOrderApplicant::getOrderNo, orderNo));
+            if (applicant != null) {
+                result.put("appName", applicant.getApplicantName());
+                result.put("appPhone", applicant.getApplicantPhone());
+                result.put("appCertType", applicant.getApplicantCertType());
+                result.put("appCertNo", applicant.getApplicantCertNo());
+                result.put("appAddress", applicant.getApplicantAddress());
+            }
 
-        InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
-            .eq(InsuranceOrderInsured::getOrderNo, orderNo));
-        if (insured != null) {
-            result.put("insuredName", insured.getInsuredName());
-            result.put("insuredPhone", insured.getInsuredPhone());
-            result.put("insuredCertType", insured.getInsuredCertType());
-            result.put("insuredCertNo", insured.getInsuredCertNo());
-            result.put("relation", insured.getRelation());
-            result.put("insuredAddress", insured.getInsuredAddress());
-        }
+            InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+                .eq(InsuranceOrderInsured::getOrderNo, orderNo));
+            if (insured != null) {
+                result.put("insuredName", insured.getInsuredName());
+                result.put("insuredPhone", insured.getInsuredPhone());
+                result.put("insuredCertType", insured.getInsuredCertType());
+                result.put("insuredCertNo", insured.getInsuredCertNo());
+                result.put("relation", insured.getRelation());
+                result.put("insuredAddress", insured.getInsuredAddress());
+            }
+        });
 
         return result;
     }
@@ -382,7 +388,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         saveInsureResultVO.setOrderNo(orderNo);
 
         // ==========================================
-        // 4. 净费逻辑判断（卫语句：如果不是代投保或不是净费，直接返回原价）
+        // 4. 净费逻辑判断（如果不是代投保或不是净费，直接返回原价）
         // ==========================================
         if (record.getInsureMode() != 1 || record.getPaymentMode() != 1) {
             saveInsureResultVO.setPremium(record.getPremium());
@@ -394,9 +400,13 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         // ==========================================
         BigDecimal finalRate = calculateFinalCommissionRate(record);
 
-        // 如果未查到佣金配置，按原价返回（或者根据您的业务抛出异常）
+        // 如果未查到佣金配置，按原价返回（或者根据业务抛出异常）
         if (finalRate.compareTo(BigDecimal.ZERO) == 0) {
             saveInsureResultVO.setPremium(record.getPremium());
+            //变更订单状态 - 待支付
+            record.setNetPremium(record.getPremium());
+            record.setStatus(3);
+            baseMapper.updateById(record);
             return saveInsureResultVO;
         }
 
@@ -484,6 +494,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             calcParam.setPaymentMode(record.getPaymentMode());
             calcParam.setPayerUserId(LoginHelper.getUserId());
             calcParam.setPolicyPremium(record.getPremium());
+            calcParam.setNetPremium(record.getNetPremium());
 
             log.info("佣金计算参数：{}",JsonUtils.toJsonString(calcParam));
 
@@ -611,10 +622,14 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         calcParam.setPolicyId(order.getId());
         calcParam.setPolicyNo(order.getOrderNo());
         calcParam.setProductId(order.getProductId());
-        calcParam.setPolicyPremium(order.getPremium());
+        calcParam.setProductName(order.getProductName());
         calcParam.setTenantId(salesUser.getTenantId());
         calcParam.setCreateById(agentUserId);
         calcParam.setCreateDeptId(agentDeptId);
+        calcParam.setPolicyPremium(order.getPremium());
+        // 🌟 补充实交保费：优先取订单里的净费(并且必须大于0)，没有则取原价
+        BigDecimal actualPaid = (order.getNetPremium() != null && order.getNetPremium().compareTo(BigDecimal.ZERO) > 0) ? order.getNetPremium() : order.getPremium();
+        calcParam.setNetPremium(actualPaid);
 
         // 🌟 角色寻址逻辑 (同步自 OpenPolicyFacadeServiceImpl)
         List<SysRoleVo> roles = salesUser.getRoles();
@@ -790,6 +805,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             calcParam.setPaymentMode(mainOrder.getPaymentMode());
             calcParam.setPayerUserId(currentUserId);
             calcParam.setPolicyPremium(totalGrossPremium); // 使用总保单保费计算
+            calcParam.setNetPremium(totalNetPremium); // 🌟 补充实交保费为批次总净费
 
             applicationContext.publishEvent(new PolicyUnderwrittenEvent(calcParam));
             log.info("批次主单 {} 佣金计算事件已触发", batchOrderNo);
@@ -798,5 +814,29 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
 
         return batchOrderNo;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean cancelOrder(InsuranceApplyRecordBo bo) {
+        if (bo == null || bo.getId() == null) {
+            throw new ServiceException("参数错误，无法取消订单");
+        }
+
+        InsuranceApplyRecord record = baseMapper.selectById(bo.getId());
+        if (record == null) {
+            throw new ServiceException("订单不存在");
+        }
+
+        // 防越权：确保当前登录人只能取消自己的订单
+        if (!record.getAgentUserId().equals(LoginHelper.getUserId())) {
+            throw new ServiceException("非法操作：无权取消此订单");
+        }
+
+        InsuranceApplyRecord updateOrder = new InsuranceApplyRecord();
+        updateOrder.setId(bo.getId());
+        updateOrder.setStatus(4); // 4为取消状态
+
+        return baseMapper.updateById(updateOrder) > 0;
     }
 }

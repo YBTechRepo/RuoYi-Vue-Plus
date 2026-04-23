@@ -13,6 +13,7 @@ public class CalcCommission {
     private Long policyId;
     private String policyNo;
     private Long productId;
+    private String productName;
 
     private String salesUserName;
     private String teamUserName;
@@ -26,6 +27,7 @@ public class CalcCommission {
     private Long createDeptId;
 
     private BigDecimal policyPremium;
+    private BigDecimal netPremium;
 
     /**
      * 支付方式 (1-净费，2-全额)

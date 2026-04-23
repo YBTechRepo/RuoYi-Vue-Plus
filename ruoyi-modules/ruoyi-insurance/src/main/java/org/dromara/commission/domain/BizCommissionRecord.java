@@ -44,6 +44,16 @@ public class BizCommissionRecord extends TenantEntity {
     private Long productId;
 
     /**
+     * 产品名称
+     */
+    private String productName;
+
+    /**
+     * 实交保费
+     */
+    private BigDecimal premium;
+
+    /**
      * 佣金计算基数
      */
     private BigDecimal commissionBase;

@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.TenantConstants;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.validate.AddGroup;
@@ -15,6 +16,7 @@ import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.encrypt.annotation.ApiEncrypt;
 import org.dromara.common.excel.utils.ExcelUtil;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
+import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.mybatis.core.page.PageQuery;
@@ -35,6 +37,7 @@ import java.util.List;
  *
  * @author Michelle.Chung
  */
+@Slf4j
 @Validated
 @RequiredArgsConstructor
 @RestController
@@ -90,6 +93,8 @@ public class SysTenantController extends BaseController {
     @RepeatSubmit()
     @PostMapping()
     public R<Void> add(@Validated(AddGroup.class) @RequestBody SysTenantBo bo) {
+        log.info("新增租户参数：{}", JsonUtils.toJsonString(bo));
+
         if (!tenantService.checkCompanyNameUnique(bo)) {
             return R.fail("新增租户'" + bo.getCompanyName() + "'失败，企业名称已存在");
         }

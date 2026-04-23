@@ -39,6 +39,7 @@
     <select id="queryAppCommissionList" resultType="org.dromara.commission.domain.vo.AppCommissionItemVo">
         SELECT
         policy_no AS policyNo,
+        product_name as productName,
         commission_base AS commissionBase,
         status AS status,
         create_time AS createTime,

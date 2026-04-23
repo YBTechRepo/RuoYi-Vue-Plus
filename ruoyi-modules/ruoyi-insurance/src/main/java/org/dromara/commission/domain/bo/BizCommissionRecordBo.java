@@ -45,6 +45,14 @@ public class BizCommissionRecordBo extends BaseEntity {
     @NotNull(message = "产品ID不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long productId;
 
+
+    private String productName;
+
+    /**
+     * 实交保费
+     */
+    private BigDecimal premium;
+
     /**
      * 佣金计算基数
      */
