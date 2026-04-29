@@ -90,9 +90,9 @@ public class InsuranceApplyRecordVo implements Serializable {
     private String customerMobile;
 
     /**
-     * 登记保费
+     * 保单保费
      */
-    @ExcelProperty(value = "登记保费")
+    @ExcelProperty(value = "保单保费")
     private BigDecimal premium;
 
     /**

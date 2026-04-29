@@ -52,6 +52,21 @@ public class InsuranceProductConfig extends TenantEntity {
     private String productType;
 
     /**
+     * 所属分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 所属分类名称
+     */
+    private String categoryName;
+
+    /**
+     * 营销标签
+     */
+    private String marketingTags;
+
+    /**
      * 产品模式
      */
     private Integer productMode;

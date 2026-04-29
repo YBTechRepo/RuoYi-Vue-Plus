@@ -121,6 +121,20 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), InsuranceProductConfig::getProductName, bo.getProductName());
         lqw.eq(StringUtils.isNotBlank(bo.getCompanyCode()), InsuranceProductConfig::getCompanyCode, bo.getCompanyCode());
         lqw.eq(StringUtils.isNotBlank(bo.getProductType()), InsuranceProductConfig::getProductType, bo.getProductType());
+        
+        // category_id tree traversal query
+        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+            w -> w.eq(InsuranceProductConfig::getCategoryId, bo.getCategoryId())
+                  .or()
+                  .inSql(InsuranceProductConfig::getCategoryId, 
+                         "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
+        );
+        
+        // marketing tags query
+        if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
+            lqw.apply(org.dromara.common.mybatis.helper.DataBaseHelper.findInSet(params.get("marketingTag").toString(), "marketing_tags"));
+        }
+
         lqw.eq(bo.getProductMode() != null, InsuranceProductConfig::getProductMode, bo.getProductMode());
         lqw.eq(bo.getMinPremium() != null, InsuranceProductConfig::getMinPremium, bo.getMinPremium());
         lqw.eq(StringUtils.isNotBlank(bo.getImgUrl()), InsuranceProductConfig::getImgUrl, bo.getImgUrl());

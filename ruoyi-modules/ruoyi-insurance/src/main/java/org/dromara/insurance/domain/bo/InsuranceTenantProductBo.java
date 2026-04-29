@@ -33,6 +33,21 @@ public class InsuranceTenantProductBo extends BaseEntity {
     private Long productId;
 
     /**
+     * 所属分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 所属分类名称
+     */
+    private String categoryName;
+
+    /**
+     * 营销标签
+     */
+    private String marketingTags;
+
+    /**
      * 上架状态
      */
     @NotBlank(message = "上架状态不能为空", groups = { AddGroup.class, EditGroup.class })

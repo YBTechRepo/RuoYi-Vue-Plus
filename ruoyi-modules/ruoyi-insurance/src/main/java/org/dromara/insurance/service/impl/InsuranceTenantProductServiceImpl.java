@@ -131,6 +131,21 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = new LambdaQueryWrapper<>();
         // 仅保留状态筛选 (前端筛选: 只看上架的 或 只看下架的)
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
+        
+        // 分类树形查询
+        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+            w -> w.eq(InsuranceTenantProduct::getCategoryId, bo.getCategoryId())
+                  .or()
+                  .inSql(InsuranceTenantProduct::getCategoryId, 
+                         "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
+        );
+        
+        // 营销标签查询
+        Map<String, Object> params = bo.getParams();
+        if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
+            lqw.apply(org.dromara.common.mybatis.helper.DataBaseHelper.findInSet(params.get("marketingTag").toString(), "marketing_tags"));
+        }
+
         // 默认按排序号升序、创建时间降序
         lqw.orderByAsc(InsuranceTenantProduct::getSort).orderByDesc(InsuranceTenantProduct::getCreateTime);
 
@@ -247,6 +262,20 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(InsuranceTenantProduct::getId);
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
+        
+        // 分类树形查询
+        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+            w -> w.eq(InsuranceTenantProduct::getCategoryId, bo.getCategoryId())
+                  .or()
+                  .inSql(InsuranceTenantProduct::getCategoryId, 
+                         "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
+        );
+        
+        // 营销标签查询
+        if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
+            lqw.apply(org.dromara.common.mybatis.helper.DataBaseHelper.findInSet(params.get("marketingTag").toString(), "marketing_tags"));
+        }
+        
         return lqw;
     }
 

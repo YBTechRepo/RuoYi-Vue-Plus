@@ -42,9 +42,9 @@ public class BizCommissionRecordVo implements Serializable {
     private Long policyId;
 
     /**
-     * 保单号
+     * 订单/保单号
      */
-    @ExcelProperty(value = "保单号")
+    @ExcelProperty(value = "订单/保单号")
     private String policyNo;
 
     /**

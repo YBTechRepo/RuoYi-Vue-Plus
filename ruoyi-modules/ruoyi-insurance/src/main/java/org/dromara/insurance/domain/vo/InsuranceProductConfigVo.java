@@ -64,6 +64,23 @@ public class InsuranceProductConfigVo implements Serializable {
     private String productType;
 
     /**
+     * 所属分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 所属分类名称
+     */
+    @ExcelProperty(value = "所属分类名称")
+    private String categoryName;
+
+    /**
+     * 营销标签
+     */
+    @ExcelProperty(value = "营销标签")
+    private String marketingTags;
+
+    /**
      * 产品模式
      */
     @ExcelProperty(value = "产品模式", converter = ExcelDictConvert.class)

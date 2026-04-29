@@ -135,6 +135,7 @@ tenant:
     - sys_oss
     - flow_spel
     - sys_role_template
+    - biz_insurance_product_category
 
 # MyBatisPlus配置
 # https://baomidou.com/config/

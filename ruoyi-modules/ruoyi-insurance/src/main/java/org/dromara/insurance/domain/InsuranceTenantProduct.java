@@ -34,6 +34,21 @@ public class InsuranceTenantProduct extends TenantEntity {
     private Long productId;
 
     /**
+     * 所属分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 所属分类名称
+     */
+    private String categoryName;
+
+    /**
+     * 营销标签
+     */
+    private String marketingTags;
+
+    /**
      * 上架状态
      */
     private String status;

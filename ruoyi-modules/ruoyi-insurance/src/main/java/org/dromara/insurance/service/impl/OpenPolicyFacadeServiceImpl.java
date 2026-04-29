@@ -59,7 +59,8 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         PolicyDto policyDto = policyCallbackDto.getPolicy();
 
         // ================= 1. 锚定真实的“出单业务员”身份 =================
-        Long agentId = Long.valueOf(policyDto.getAgentCode());
+        String agentCode = policyDto.getAgentCode();
+        Long agentId = Long.valueOf(agentCode.substring(2));
         SysUserVo salesUser = sysUserService.selectUserById(agentId);
         if (salesUser == null) {
             log.error("agent_id对应的出单用户不存在，agentId={}", policyDto.getAgentCode());
