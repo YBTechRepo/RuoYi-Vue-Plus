@@ -220,6 +220,12 @@ public class SysTenantServiceImpl implements ISysTenantService {
                 leaderUserRole.setRoleId(leaderRoleId);
                 userRoleMapper.insert(leaderUserRole);
             }
+
+            // 初始化leader用户账户
+            org.dromara.common.core.utils.SpringUtils.context().publishEvent(
+                new org.dromara.common.core.event.UserInviteSuccessEvent(
+                    this, leaderUser.getUserId(), leaderUser.getUserName(), leaderUser.getNickName(), tenantId)
+            );
         }
 
         String defaultTenantId = TenantConstants.DEFAULT_TENANT_ID;

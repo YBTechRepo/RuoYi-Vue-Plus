@@ -61,11 +61,28 @@ public class InsuranceTenantProductVo implements Serializable {
     private String productName;
 
     /**
-     * 产品类型
+     * 产品类垈
      */
-    @ExcelProperty(value = "产品类型", converter = ExcelDictConvert.class)
+    @ExcelProperty(value = "产品类垈", converter = ExcelDictConvert.class)
     @ExcelDictFormat(dictType = "insurance_product_type")
     private String productType;
+
+    /**
+     * 所属分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 所属分类名称
+     */
+    @ExcelProperty(value = "所属分类名称")
+    private String categoryName;
+
+    /**
+     * 营销标签
+     */
+    @ExcelProperty(value = "营销标签")
+    private String marketingTags;
 
     /**
      * 产品模式
@@ -97,21 +114,21 @@ public class InsuranceTenantProductVo implements Serializable {
     private String status;
 
     /**
-     * 自定义排序
+     * 自定义排埏
      */
-    @ExcelProperty(value = "自定义排序")
+    @ExcelProperty(value = "自定义排埏")
     private Integer sort;
 
     /**
      * 乐观锁版本
      */
-    //@ExcelProperty(value = "乐观锁版本")
+    //@ExcelProperty(value = "乐观锅版本")
     private Integer version;
 
     /**
-     * 删除标记
+     * 刀陦懇记
      */
-    //@ExcelProperty(value = "删除标记")
+    //@ExcelProperty(value = "刀陦懇记")
     private String delFlag;
 
     /**
@@ -120,7 +137,7 @@ public class InsuranceTenantProductVo implements Serializable {
     private BigDecimal serviceFee;
 
     /**
-     * 净费出单保费
+     * 净费燺单保费
      */
     private BigDecimal netPremium;
 

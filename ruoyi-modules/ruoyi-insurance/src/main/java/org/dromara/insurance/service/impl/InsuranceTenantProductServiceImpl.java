@@ -79,6 +79,9 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setProductMode(baseInfo.getProductMode());
                 vo.setMinPremium(baseInfo.getMinPremium());
                 vo.setDescription(baseInfo.getDescription());
+                vo.setCategoryId(baseInfo.getCategoryId());
+                vo.setCategoryName(baseInfo.getCategoryName());
+                vo.setMarketingTags(baseInfo.getMarketingTags());
 
                 // 翻译图片链接 (在平台租户环境下)
                 if (StringUtils.isNotBlank(baseInfo.getImgUrl())) {
@@ -107,8 +110,12 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                         BigDecimal feeRatio = currentConfig.getFeeRatio();
                         vo.setServiceFee(feeRatio);
                         if (vo.getMinPremium() != null) {
-                            BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
-                            vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                            if (vo.getProductMode() != null && vo.getProductMode() == 2) {
+                                vo.setNetPremium(null);
+                            } else {
+                                BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
+                                vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                            }
                         }
                     }
                 }
@@ -131,15 +138,15 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = new LambdaQueryWrapper<>();
         // 仅保留状态筛选 (前端筛选: 只看上架的 或 只看下架的)
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
-        
+
         // 分类树形查询
-        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L,
             w -> w.eq(InsuranceTenantProduct::getCategoryId, bo.getCategoryId())
                   .or()
-                  .inSql(InsuranceTenantProduct::getCategoryId, 
+                  .inSql(InsuranceTenantProduct::getCategoryId,
                          "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
         );
-        
+
         // 营销标签查询
         Map<String, Object> params = bo.getParams();
         if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
@@ -210,6 +217,9 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setDescription(baseInfo.getDescription());
                 vo.setStatus(tp.getStatus());
                 vo.setSort(tp.getSort());
+                vo.setCategoryId(baseInfo.getCategoryId());
+                vo.setCategoryName(baseInfo.getCategoryName());
+                vo.setMarketingTags(baseInfo.getMarketingTags());
 
                 // 🌟 核心：从刚才缓存的 Map 中拿出真实链接，手动赋给 VO
                 vo.setImgUrl(realOssUrlCache.get(baseInfo.getImgUrl()));
@@ -228,9 +238,12 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                         BigDecimal feeRatio = currentConfig.getFeeRatio();
                         vo.setServiceFee(feeRatio);
                         if (vo.getMinPremium() != null) {
-                            // 净费 = minPremium * (1 - feeRatio)
-                            BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
-                            vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                            if (vo.getProductMode() != null && vo.getProductMode() == 2) {
+                                vo.setNetPremium(null);
+                            } else {
+                                BigDecimal netPremium = vo.getMinPremium().multiply(BigDecimal.ONE.subtract(feeRatio));
+                                vo.setNetPremium(netPremium.setScale(2, RoundingMode.HALF_UP));
+                            }
                         }
                     }
                 }
@@ -262,20 +275,20 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(InsuranceTenantProduct::getId);
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
-        
+
         // 分类树形查询
-        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+        lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L,
             w -> w.eq(InsuranceTenantProduct::getCategoryId, bo.getCategoryId())
                   .or()
-                  .inSql(InsuranceTenantProduct::getCategoryId, 
+                  .inSql(InsuranceTenantProduct::getCategoryId,
                          "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
         );
-        
+
         // 营销标签查询
         if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
             lqw.apply(org.dromara.common.mybatis.helper.DataBaseHelper.findInSet(params.get("marketingTag").toString(), "marketing_tags"));
         }
-        
+
         return lqw;
     }
 
@@ -351,11 +364,25 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         }
 
         // ================= 2. 构建实体列表 =================
+        // =============== 1.5 赨租户淥主帓获取囮贏和营鐀标嬾信曯 ================
+        Map<Long, InsuranceProductConfig> baseProductMap = TenantHelper.dynamic("000000", () -> {
+             return insuranceProductConfigMapper.selectBatchIds(validIds).stream()
+                 .collect(Collectors.toMap(InsuranceProductConfig::getId, p -> p));
+        });
+
         List<InsuranceTenantProduct> insertList = new ArrayList<>();
         for (Long productId : validIds) {
             InsuranceTenantProduct tp = new InsuranceTenantProduct();
             tp.setProductId(productId);
-            tp.setStatus("0"); // 默认状态为正常
+            tp.setStatus("0"); // Ĭ��״̬Ϊ����
+
+            InsuranceProductConfig baseInfo = baseProductMap.get(productId);
+            if (baseInfo != null) {
+                tp.setCategoryId(baseInfo.getCategoryId());
+                tp.setCategoryName(baseInfo.getCategoryName());
+                tp.setMarketingTags(baseInfo.getMarketingTags());
+            }
+
             insertList.add(tp);
         }
 

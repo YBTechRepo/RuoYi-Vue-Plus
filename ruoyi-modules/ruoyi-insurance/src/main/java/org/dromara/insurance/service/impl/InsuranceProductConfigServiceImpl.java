@@ -209,7 +209,9 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         boolean hasFilter = StringUtils.isNotBlank(bo.getProductName()) ||
                             StringUtils.isNotBlank(bo.getCompanyCode()) ||
                             StringUtils.isNotBlank(bo.getProductType()) ||
-                            bo.getProductMode() != null;
+                            bo.getProductMode() != null ||
+                            (bo.getCategoryId() != null && bo.getCategoryId() != 0L) ||
+                            (bo.getParams() != null && bo.getParams().get("marketingTag") != null && StringUtils.isNotBlank(bo.getParams().get("marketingTag").toString()));
 
         List<Long> filterProductIds = null;
         if (hasFilter) {
@@ -219,6 +221,21 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                 filterLqw.like(StringUtils.isNotBlank(bo.getProductName()), InsuranceProductConfig::getProductName, bo.getProductName());
                 filterLqw.eq(StringUtils.isNotBlank(bo.getCompanyCode()), InsuranceProductConfig::getCompanyCode, bo.getCompanyCode());
                 filterLqw.eq(StringUtils.isNotBlank(bo.getProductType()), InsuranceProductConfig::getProductType, bo.getProductType());
+                
+                // category_id tree traversal query
+                filterLqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L, 
+                    w -> w.eq(InsuranceProductConfig::getCategoryId, bo.getCategoryId())
+                          .or()
+                          .inSql(InsuranceProductConfig::getCategoryId, 
+                                 "SELECT category_id FROM biz_insurance_product_category WHERE FIND_IN_SET(" + bo.getCategoryId() + ", ancestors)")
+                );
+                
+                // marketing tags query
+                Map<String, Object> params = bo.getParams();
+                if (params != null && params.get("marketingTag") != null && StringUtils.isNotBlank(params.get("marketingTag").toString())) {
+                    filterLqw.apply(org.dromara.common.mybatis.helper.DataBaseHelper.findInSet(params.get("marketingTag").toString(), "marketing_tags"));
+                }
+
                 filterLqw.select(InsuranceProductConfig::getId);
 
                 List<Object> objs = baseMapper.selectObjs(filterLqw);
