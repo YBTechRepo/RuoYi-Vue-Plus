@@ -35,7 +35,8 @@ public class SseController implements DisposableBean {
         }
         String tokenValue = StpUtil.getTokenValue();
         Long userId = LoginHelper.getUserId();
-        return sseEmitterManager.connect(userId, tokenValue);
+        String clientId = LoginHelper.getClientId();
+        return sseEmitterManager.connect(userId, tokenValue, clientId);
     }
 
     /**

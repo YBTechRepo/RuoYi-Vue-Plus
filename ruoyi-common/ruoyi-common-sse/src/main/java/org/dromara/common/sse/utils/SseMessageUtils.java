@@ -7,6 +7,8 @@ import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.sse.core.SseEmitterManager;
 import org.dromara.common.sse.dto.SseMessageDto;
 
+import java.util.List;
+
 /**
  * SSE工具类
  *
@@ -60,6 +62,22 @@ public class SseMessageUtils {
             return;
         }
         MANAGER.publishMessage(sseMessageDto);
+    }
+
+    /**
+     * 向指定客户端发布订阅消息
+     *
+     * @param clientId 要发送消息的客户端ID
+     * @param message  要发布的消息内容
+     */
+    public static void publishClient(String clientId, String message) {
+        if (!isEnable()) {
+            return;
+        }
+        SseMessageDto dto = new SseMessageDto();
+        dto.setClientIds(List.of(clientId));
+        dto.setMessage(message);
+        MANAGER.publishMessage(dto);
     }
 
     /**

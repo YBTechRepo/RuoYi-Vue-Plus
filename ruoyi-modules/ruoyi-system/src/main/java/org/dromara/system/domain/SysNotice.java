@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 
+import java.util.Date;
+
 /**
  * 通知公告表 sys_notice
  *
@@ -42,6 +44,26 @@ public class SysNotice extends TenantEntity {
      * 公告状态（0正常 1关闭）
      */
     private String status;
+
+    /**
+     * 客户端ID
+     */
+    private String clientId;
+
+    /**
+     * 是否登录弹窗（0否 1是）
+     */
+    private String popupFlag;
+
+    /**
+     * 弹窗开始时间
+     */
+    private Date popupStartTime;
+
+    /**
+     * 弹窗结束时间
+     */
+    private Date popupEndTime;
 
     /**
      * 备注

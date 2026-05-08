@@ -23,6 +23,11 @@ public class SseMessageDto implements Serializable {
     private List<Long> userIds;
 
     /**
+     * 需要推送到的客户端ID列表
+     */
+    private List<String> clientIds;
+
+    /**
      * 需要发送的消息
      */
     private String message;

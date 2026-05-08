@@ -50,6 +50,26 @@ public class SysNoticeVo implements Serializable {
     private String status;
 
     /**
+     * 客户端ID
+     */
+    private String clientId;
+
+    /**
+     * 是否登录弹窗（0否 1是）
+     */
+    private String popupFlag;
+
+    /**
+     * 弹窗开始时间
+     */
+    private Date popupStartTime;
+
+    /**
+     * 弹窗结束时间
+     */
+    private Date popupEndTime;
+
+    /**
      * 备注
      */
     private String remark;

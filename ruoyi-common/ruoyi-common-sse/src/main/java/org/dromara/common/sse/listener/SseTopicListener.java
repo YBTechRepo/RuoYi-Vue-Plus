@@ -34,6 +34,10 @@ public class SseTopicListener implements ApplicationRunner, Ordered {
                 message.getUserIds().forEach(key -> {
                     sseEmitterManager.sendMessage(key, message.getMessage());
                 });
+            } else if (CollUtil.isNotEmpty(message.getClientIds())) {
+                message.getClientIds().forEach(clientId -> {
+                    sseEmitterManager.sendMessageByClientId(clientId, message.getMessage());
+                });
             } else {
                 sseEmitterManager.sendMessage(message.getMessage());
             }

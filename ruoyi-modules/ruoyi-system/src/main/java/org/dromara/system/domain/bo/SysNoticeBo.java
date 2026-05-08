@@ -9,6 +9,8 @@ import org.dromara.common.core.xss.Xss;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 import org.dromara.system.domain.SysNotice;
 
+import java.util.Date;
+
 /**
  * 通知公告业务对象 sys_notice
  *
@@ -47,6 +49,27 @@ public class SysNoticeBo extends BaseEntity {
      * 公告状态（0正常 1关闭）
      */
     private String status;
+
+    /**
+     * 客户端ID
+     */
+    @NotBlank(message = "客户端不能为空")
+    private String clientId;
+
+    /**
+     * 是否登录弹窗（0否 1是）
+     */
+    private String popupFlag;
+
+    /**
+     * 弹窗开始时间
+     */
+    private Date popupStartTime;
+
+    /**
+     * 弹窗结束时间
+     */
+    private Date popupEndTime;
 
     /**
      * 备注

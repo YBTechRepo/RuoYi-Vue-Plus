@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.service.DictService;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
@@ -16,6 +17,8 @@ import org.dromara.system.domain.vo.SysNoticeVo;
 import org.dromara.system.service.ISysNoticeService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 公告 信息操作处理
@@ -52,6 +55,42 @@ public class SysNoticeController extends BaseController {
     }
 
     /**
+     * 获取用户端可见通知公告列表
+     */
+    @GetMapping("/user/list")
+    public TableDataInfo<SysNoticeVo> userList(SysNoticeBo notice, PageQuery pageQuery) {
+        return noticeService.selectPageUserNoticeList(notice, pageQuery);
+    }
+
+    /**
+     * 根据通知公告编号获取用户端可见详细信息
+     *
+     * @param noticeId 公告ID
+     */
+    @GetMapping(value = "/user/{noticeId}")
+    public R<SysNoticeVo> getUserInfo(@PathVariable Long noticeId) {
+        return R.ok(noticeService.selectUserNoticeById(noticeId));
+    }
+
+    /**
+     * 获取当前用户未确认的登录弹窗通知
+     */
+    @GetMapping("/popup/unread")
+    public R<List<SysNoticeVo>> unreadPopupNotices(@RequestParam(required = false) String clientId) {
+        return R.ok(noticeService.selectUnreadPopupNotices(clientId));
+    }
+
+    /**
+     * 标记登录弹窗通知已读
+     *
+     * @param noticeId 公告ID
+     */
+    @PostMapping("/popup/read/{noticeId}")
+    public R<Void> readPopupNotice(@PathVariable Long noticeId) {
+        return toAjax(noticeService.readPopupNotice(noticeId));
+    }
+
+    /**
      * 新增通知公告
      */
     @SaCheckPermission("system:notice:add")
@@ -64,7 +103,12 @@ public class SysNoticeController extends BaseController {
             return R.fail();
         }
         String type = dictService.getDictLabel("sys_notice_type", notice.getNoticeType());
-        SseMessageUtils.publishAll("[" + type + "] " + notice.getNoticeTitle());
+        String message = "[" + type + "] " + notice.getNoticeTitle();
+        if (StringUtils.isNotBlank(notice.getClientId())) {
+            SseMessageUtils.publishClient(notice.getClientId(), message);
+        } else {
+            SseMessageUtils.publishAll(message);
+        }
         return R.ok();
     }
 

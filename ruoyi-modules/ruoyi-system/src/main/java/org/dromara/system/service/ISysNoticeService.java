@@ -40,6 +40,38 @@ public interface ISysNoticeService {
     List<SysNoticeVo> selectNoticeList(SysNoticeBo notice);
 
     /**
+     * 分页查询用户端可见通知公告列表
+     *
+     * @param notice    查询条件
+     * @param pageQuery 分页参数
+     * @return 通知公告分页列表
+     */
+    TableDataInfo<SysNoticeVo> selectPageUserNoticeList(SysNoticeBo notice, PageQuery pageQuery);
+
+    /**
+     * 查询用户端可见公告信息
+     *
+     * @param noticeId 公告ID
+     * @return 公告信息
+     */
+    SysNoticeVo selectUserNoticeById(Long noticeId);
+
+    /**
+     * 查询当前用户未确认的登录弹窗通知
+     *
+     * @return 通知公告集合
+     */
+    List<SysNoticeVo> selectUnreadPopupNotices(String clientId);
+
+    /**
+     * 标记登录弹窗通知已读
+     *
+     * @param noticeId 公告ID
+     * @return 结果
+     */
+    int readPopupNotice(Long noticeId);
+
+    /**
      * 新增公告
      *
      * @param bo 公告信息
