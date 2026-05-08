@@ -78,13 +78,9 @@ public class InsuranceProductCategoryVo implements Serializable {
     /**
      * 删除标志
      */
-    @ExcelProperty(value = "删除标志")
     private String delFlag;
 
-    /**
-     *
-     */
-    @ExcelProperty(value = "")
+
     private Long version;
 
     private String iconColor;
