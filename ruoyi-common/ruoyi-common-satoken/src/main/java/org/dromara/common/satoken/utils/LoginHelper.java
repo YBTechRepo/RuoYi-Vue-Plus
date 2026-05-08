@@ -113,6 +113,13 @@ public class LoginHelper {
     }
 
     /**
+     * 获取客户端ID
+     */
+    public static String getClientId() {
+        return Convert.toStr(getExtra(CLIENT_KEY));
+    }
+
+    /**
      * 获取部门ID
      */
     public static Long getDeptId() {
