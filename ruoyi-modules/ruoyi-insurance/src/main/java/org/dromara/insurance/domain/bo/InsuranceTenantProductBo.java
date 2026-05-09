@@ -48,6 +48,11 @@ public class InsuranceTenantProductBo extends BaseEntity {
     private String marketingTags;
 
     /**
+     * 产品模式（查询条件，来自平台产品表）
+     */
+    private Integer productMode;
+
+    /**
      * 上架状态
      */
     @NotBlank(message = "上架状态不能为空", groups = { AddGroup.class, EditGroup.class })

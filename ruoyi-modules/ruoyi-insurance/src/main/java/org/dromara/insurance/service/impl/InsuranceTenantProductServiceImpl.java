@@ -77,8 +77,11 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setProductName(baseInfo.getProductName());
                 vo.setProductType(baseInfo.getProductType());
                 vo.setProductMode(baseInfo.getProductMode());
+                vo.setInsureMode(baseInfo.getInsureMode());
+                vo.setPaymentMode(baseInfo.getPaymentMode());
                 vo.setMinPremium(baseInfo.getMinPremium());
                 vo.setDescription(baseInfo.getDescription());
+                vo.setProposalUrl(buildProposalUrl(baseInfo.getProposalUrl()));
                 vo.setCategoryId(baseInfo.getCategoryId());
                 vo.setCategoryName(baseInfo.getCategoryName());
                 vo.setMarketingTags(baseInfo.getMarketingTags());
@@ -138,6 +141,7 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = new LambdaQueryWrapper<>();
         // 仅保留状态筛选 (前端筛选: 只看上架的 或 只看下架的)
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
+        applyProductModeFilter(bo, lqw);
 
         // 分类树形查询
         lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L,
@@ -213,8 +217,11 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setProductName(baseInfo.getProductName()); // 缝合名字
                 vo.setProductType(baseInfo.getProductType());
                 vo.setProductMode(baseInfo.getProductMode());
+                vo.setInsureMode(baseInfo.getInsureMode());
+                vo.setPaymentMode(baseInfo.getPaymentMode());
                 vo.setMinPremium(baseInfo.getMinPremium());
                 vo.setDescription(baseInfo.getDescription());
+                vo.setProposalUrl(buildProposalUrl(baseInfo.getProposalUrl()));
                 vo.setStatus(tp.getStatus());
                 vo.setSort(tp.getSort());
                 vo.setCategoryId(baseInfo.getCategoryId());
@@ -259,6 +266,47 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
     }
 
     /**
+     * 投保链接占位符替换：后台租户产品列表与销售端保持一致，agentCode 使用 KD + 当前用户ID。
+     */
+    private String buildProposalUrl(String proposalUrl) {
+        if (StringUtils.isBlank(proposalUrl)) {
+            return proposalUrl;
+        }
+        Long currentUserId = LoginHelper.getUserId();
+        String agentUserId = currentUserId == null ? "" : String.valueOf(currentUserId);
+        String userName = LoginHelper.getUsername();
+        String agentCode = StringUtils.isBlank(agentUserId) ? (userName == null ? "" : userName) : "KD" + agentUserId;
+        return proposalUrl
+            .replace("$agentCode$", agentCode)
+            .replace("${agentCode}", agentCode)
+            .replace("{agentCode}", agentCode)
+            .replace("$agentUserId$", agentUserId)
+            .replace("${agentUserId}", agentUserId)
+            .replace("{agentUserId}", agentUserId);
+    }
+
+    /**
+     * 产品模式来自平台产品表，先跨租户查询符合模式的产品ID，再约束本租户货架数据。
+     */
+    private void applyProductModeFilter(InsuranceTenantProductBo bo, LambdaQueryWrapper<InsuranceTenantProduct> lqw) {
+        if (bo.getProductMode() == null) {
+            return;
+        }
+        List<Long> productIds = TenantHelper.dynamic("000000", () -> insuranceProductConfigMapper.selectList(
+                new LambdaQueryWrapper<InsuranceProductConfig>()
+                    .select(InsuranceProductConfig::getId)
+                    .eq(InsuranceProductConfig::getProductMode, bo.getProductMode())
+            ).stream()
+            .map(InsuranceProductConfig::getId)
+            .collect(Collectors.toList())
+        );
+        if (CollUtil.isEmpty(productIds)) {
+            lqw.eq(InsuranceTenantProduct::getProductId, -1L);
+            return;
+        }
+        lqw.in(InsuranceTenantProduct::getProductId, productIds);
+    }
+    /**
      * 查询符合条件的产品库列表
      *
      * @param bo 查询条件
@@ -275,6 +323,7 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         LambdaQueryWrapper<InsuranceTenantProduct> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(InsuranceTenantProduct::getId);
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), InsuranceTenantProduct::getStatus, bo.getStatus());
+        applyProductModeFilter(bo, lqw);
 
         // 分类树形查询
         lqw.and(bo.getCategoryId() != null && bo.getCategoryId() != 0L,

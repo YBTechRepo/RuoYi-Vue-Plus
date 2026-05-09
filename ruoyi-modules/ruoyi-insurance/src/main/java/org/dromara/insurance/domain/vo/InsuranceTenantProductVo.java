@@ -92,10 +92,25 @@ public class InsuranceTenantProductVo implements Serializable {
     private Integer productMode;
 
     /**
+     * 投保模式
+     */
+    private Integer insureMode;
+
+    /**
+     * 支付模式
+     */
+    private Integer paymentMode;
+
+    /**
      * 最低保费
      */
     @ExcelProperty(value = "最低保费")
     private BigDecimal minPremium;
+
+    /**
+     * 投保链接
+     */
+    private String proposalUrl;
 
 
     private String imgUrl;
