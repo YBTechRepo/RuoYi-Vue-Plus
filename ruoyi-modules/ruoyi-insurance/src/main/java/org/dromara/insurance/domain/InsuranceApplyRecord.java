@@ -112,6 +112,11 @@ public class InsuranceApplyRecord extends TenantEntity {
     private Integer insureMode;
 
     /**
+     * 产品模式
+     */
+    private Integer productMode;
+
+    /**
      * 支付模式 0-常规支付 1-余额代扣
      */
     private Integer paymentMode;
@@ -127,4 +132,44 @@ public class InsuranceApplyRecord extends TenantEntity {
      * 所属批次单号（子单指向主单）
      */
     private String batchOrderNo;
+
+    /**
+     * 卡密规格ID
+     */
+    private String specId;
+
+    /**
+     * 卡密规格名称
+     */
+    private String specName;
+
+    /**
+     * 商品金额
+     */
+    private BigDecimal goodsAmount;
+
+    /**
+     * 运费金额
+     */
+    private BigDecimal freightAmount;
+
+    /**
+     * 购买时选择的保险公司
+     */
+    private String selectedCompanyCode;
+
+    /**
+     * 收货人姓名
+     */
+    private String receiverName;
+
+    /**
+     * 收货人手机号
+     */
+    private String receiverMobile;
+
+    /**
+     * 收货地址
+     */
+    private String receiverAddress;
 }

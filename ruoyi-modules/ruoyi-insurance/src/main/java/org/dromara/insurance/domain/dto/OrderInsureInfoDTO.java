@@ -10,6 +10,11 @@ import java.util.List;
 
 @Data
 public class OrderInsureInfoDTO {
+    /**
+     * 产品模式：3 为卡密产品
+     */
+    private Integer productMode;
+
     @NotBlank(message = "投保人姓名不能为空")
     private String applicantName;
 
@@ -36,4 +41,24 @@ public class OrderInsureInfoDTO {
     @NotEmpty(message = "至少需要填写一名被保人信息")
     @Valid // 🚀 极度重要：开启级联校验，这样 Spring 才会去校验 InsuredItemDTO 里面的 @NotBlank
     private List<OrderInsuredItemDTO> insuredList;
+
+    /**
+     * 卡密订单：购买时选择的保险公司
+     */
+    private String selectedCompanyCode;
+
+    /**
+     * 卡密订单：收货人姓名
+     */
+    private String receiverName;
+
+    /**
+     * 卡密订单：收货人手机号
+     */
+    private String receiverMobile;
+
+    /**
+     * 卡密订单：收货地址
+     */
+    private String receiverAddress;
 }

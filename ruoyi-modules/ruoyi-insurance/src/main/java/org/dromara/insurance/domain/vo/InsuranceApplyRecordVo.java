@@ -141,6 +141,13 @@ public class InsuranceApplyRecordVo implements Serializable {
     private Integer insureMode;
 
     /**
+     * 产品模式
+     */
+    @ExcelProperty(value = "产品模式", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_product_mode")
+    private Integer productMode;
+
+    /**
      * 支付模式 0-常规支付 1-余额代扣
      */
     @ExcelProperty(value = "支付模式", converter = ExcelDictConvert.class)
@@ -158,6 +165,54 @@ public class InsuranceApplyRecordVo implements Serializable {
      */
     @ExcelProperty(value = "所属批次单号")
     private String batchOrderNo;
+
+    /**
+     * 卡密规格ID
+     */
+    private String specId;
+
+    /**
+     * 卡密规格名称
+     */
+    @ExcelProperty(value = "卡密规格")
+    private String specName;
+
+    /**
+     * 商品金额
+     */
+    @ExcelProperty(value = "商品金额")
+    private BigDecimal goodsAmount;
+
+    /**
+     * 运费金额
+     */
+    @ExcelProperty(value = "运费金额")
+    private BigDecimal freightAmount;
+
+    /**
+     * 购买时选择的保险公司
+     */
+    @ExcelProperty(value = "选择保险公司", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "insurance_company")
+    private String selectedCompanyCode;
+
+    /**
+     * 收货人姓名
+     */
+    @ExcelProperty(value = "收货人姓名")
+    private String receiverName;
+
+    /**
+     * 收货人手机号
+     */
+    @ExcelProperty(value = "收货人手机号")
+    private String receiverMobile;
+
+    /**
+     * 收货地址
+     */
+    @ExcelProperty(value = "收货地址")
+    private String receiverAddress;
 
     /**
      * 投保人姓名

@@ -252,7 +252,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
         //投保模式 0-自投保 1-代投保
         //支付模式 0-常规支付 1-余额代扣
-        if(bo.getInsureMode() == 1 && bo.getPaymentMode() == 1){
+        if(Objects.equals(bo.getInsureMode(), 1) && Objects.equals(bo.getPaymentMode(), 1)){
             add.setStatus(2);
         }
 
@@ -343,6 +343,23 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
 
         // ==========================================
+        // 0. 查验主订单；卡密订单会走专属收货信息保存，不落投被保人表
+        // ==========================================
+        InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
+            .eq(InsuranceApplyRecord::getOrderNo, orderNo)
+            .eq(InsuranceApplyRecord::getDelFlag, "0"));
+
+        if (record == null) {
+            throw new ServiceException("无效的订单记录");
+        }
+
+        if (Objects.equals(record.getProductMode(), 3) && Objects.equals(record.getInsureMode(), 2)) {
+            return saveCardSecretOrderInfo(orderNo, infoDTO, record);
+        }
+
+        validateRegularInsureInfo(infoDTO);
+
+        // ==========================================
         // 1. 幂等性防线：先清理旧数据，防止重复提交产生冗余
         // ==========================================
         insuranceOrderApplicantMapper.delete(new LambdaQueryWrapper<InsuranceOrderApplicant>()
@@ -370,17 +387,6 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
                 insuredEntityList.add(insured);
             }
             insuranceOrderInsuredMapper.insertBatch(insuredEntityList);
-        }
-
-        // ==========================================
-        // 3. 查验主订单
-        // ==========================================
-        InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
-            .eq(InsuranceApplyRecord::getOrderNo, orderNo)
-            .eq(InsuranceApplyRecord::getDelFlag, "0"));
-
-        if (record == null) {
-            throw new ServiceException("无效的订单记录");
         }
 
         // 准备通用的返回对象
@@ -426,6 +432,71 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         // 返回净费
         saveInsureResultVO.setPremium(netPremium);
         return saveInsureResultVO;
+    }
+
+    private SaveInsureResultVO saveCardSecretOrderInfo(String orderNo, OrderInsureInfoDTO infoDTO, InsuranceApplyRecord record) {
+        if (StringUtils.isBlank(infoDTO.getReceiverName())) {
+            throw new ServiceException("收货人姓名不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getReceiverMobile())) {
+            throw new ServiceException("收货人手机号不能为空");
+        }
+        if (!infoDTO.getReceiverMobile().matches("^1[3-9]\\d{9}$")) {
+            throw new ServiceException("收货人手机号格式不正确");
+        }
+        if (StringUtils.isBlank(infoDTO.getReceiverAddress())) {
+            throw new ServiceException("收货地址不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getSelectedCompanyCode())) {
+            throw new ServiceException("请选择保险公司");
+        }
+
+        InsuranceApplyRecord update = new InsuranceApplyRecord();
+        update.setId(record.getId());
+        update.setCustomerName(infoDTO.getReceiverName());
+        update.setCustomerMobile(infoDTO.getReceiverMobile());
+        update.setReceiverName(infoDTO.getReceiverName());
+        update.setReceiverMobile(infoDTO.getReceiverMobile());
+        update.setReceiverAddress(infoDTO.getReceiverAddress());
+        update.setSelectedCompanyCode(infoDTO.getSelectedCompanyCode());
+        update.setNetPremium(record.getPremium());
+        update.setStatus(3);
+        baseMapper.updateById(update);
+
+        SaveInsureResultVO resultVO = new SaveInsureResultVO();
+        resultVO.setOrderNo(orderNo);
+        resultVO.setPremium(record.getPremium());
+        return resultVO;
+    }
+
+    private void validateRegularInsureInfo(OrderInsureInfoDTO infoDTO) {
+        if (StringUtils.isBlank(infoDTO.getApplicantName())) {
+            throw new ServiceException("投保人姓名不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getApplicantCertType())) {
+            throw new ServiceException("请选择投保人证件类型");
+        }
+        if (StringUtils.isBlank(infoDTO.getApplicantCertNo())) {
+            throw new ServiceException("投保人证件号码不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getCertStartDate())) {
+            throw new ServiceException("投保人证件生效起期不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getCertEndDate())) {
+            throw new ServiceException("投保人证件生效止期不能为空");
+        }
+        if (StringUtils.isBlank(infoDTO.getApplicantPhone())) {
+            throw new ServiceException("投保人手机号不能为空");
+        }
+        if (!infoDTO.getApplicantPhone().matches("^1[3-9]\\d{9}$")) {
+            throw new ServiceException("投保人手机号格式不正确");
+        }
+        if (StringUtils.isBlank(infoDTO.getApplicantAddress())) {
+            throw new ServiceException("投保人地址不能为空");
+        }
+        if (CollUtil.isEmpty(infoDTO.getInsuredList())) {
+            throw new ServiceException("至少需要填写一名被保人信息");
+        }
     }
 
     @Override

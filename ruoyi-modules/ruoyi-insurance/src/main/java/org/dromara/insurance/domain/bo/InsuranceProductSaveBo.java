@@ -21,6 +21,12 @@ public class InsuranceProductSaveBo {
     // 【第五部分：理赔流程图】(存入 detail 表 JSON 字段)
     private List<String> claimImages;
 
+    // 【朋友圈营销文案】(存入 detail 表)
+    private String marketingCopy;
+
+    // 【朋友圈营销素材图片】(存入 detail 表 JSON 字段)
+    private List<String> marketingImages;
+
     // 【第六部分：条款须知文件】(存入 detail 表 JSON 字段)
     private List<InsuranceProductDetail.ClauseItem> clauseFiles;
 
@@ -28,6 +34,11 @@ public class InsuranceProductSaveBo {
      * 理赔说明步骤
      */
     private List<InsuranceProductDetail.StepItem> claimInstructions;
+
+    /**
+     * 卡密产品规格
+     */
+    private List<InsuranceProductDetail.CardSpecItem> cardSpecs;
 
     private String imgUrl;
 }

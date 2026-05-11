@@ -44,6 +44,16 @@ public class InsuranceProductDetailBo extends BaseEntity {
     private List<String> claimImages;
 
     /**
+     * 朋友圈营销文案
+     */
+    private String marketingCopy;
+
+    /**
+     * 朋友圈营销素材图片 (JSON数组：["url1", "url2"])
+     */
+    private List<String> marketingImages;
+
+    /**
      * 投保须知 (JSON对象数组：[{"title":"", "content":"", "sort":1}])
      */
     private List<InsuranceProductDetail.NoticeItem> insureNotice;
@@ -57,6 +67,11 @@ public class InsuranceProductDetailBo extends BaseEntity {
      * 理赔说明步骤
      */
     private List<InsuranceProductDetail.StepItem> claimInstructions;
+
+    /**
+     * 卡密产品规格
+     */
+    private List<InsuranceProductDetail.CardSpecItem> cardSpecs;
 
     /**
      * 乐观锁版本

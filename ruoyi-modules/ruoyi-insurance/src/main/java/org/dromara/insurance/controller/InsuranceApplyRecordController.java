@@ -155,7 +155,7 @@ public class InsuranceApplyRecordController extends BaseController {
     @RepeatSubmit()
     @PostMapping("/saveInsureInfo/{orderNo}")
     public R<SaveInsureResultVO> saveInsureInfo(@PathVariable("orderNo") String orderNo,
-                                  @Validated @RequestBody OrderInsureInfoDTO infoDTO) {
+                                  @RequestBody OrderInsureInfoDTO infoDTO) {
         log.info("orderNo：{}",orderNo);
         log.info("infoDTO：{}", JsonUtils.toJsonString(infoDTO));
         SaveInsureResultVO saveInsureResultVO = insuranceApplyRecordService.saveInsureInfo(orderNo, infoDTO);

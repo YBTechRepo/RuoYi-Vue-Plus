@@ -590,9 +590,14 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         if (productBo == null) {
             throw new ServiceException("产品基础信息不能为空");
         }
+        boolean cardSecretProduct = Objects.equals(productBo.getProductMode(), 3) && Objects.equals(productBo.getInsureMode(), 2);
+        if (cardSecretProduct) {
+            normalizeProductFreight(productBo);
+            validateCardSpecs(formBo);
+        }
 
         // ================= 🌟 新增：服务费配置时间重叠校验 =================
-        if (StringUtils.isNotBlank(productBo.getServiceFeeConfig())) {
+        if (!cardSecretProduct && StringUtils.isNotBlank(productBo.getServiceFeeConfig())) {
             List<org.dromara.insurance.domain.bo.ServiceFeeConfig> configs = org.dromara.common.json.utils.JsonUtils.parseArray(productBo.getServiceFeeConfig(), org.dromara.insurance.domain.bo.ServiceFeeConfig.class);
             if (CollUtil.isNotEmpty(configs)) {
                 // 过滤掉未设置生效时间的无效数据，并按生效时间升序排序
@@ -642,7 +647,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         liabilityMapper.delete(new LambdaQueryWrapper<InsuranceProductLiability>()
             .eq(InsuranceProductLiability::getProductId, productId));
 
-        if (CollUtil.isNotEmpty(formBo.getLiabilityList())) {
+        if (!cardSecretProduct && CollUtil.isNotEmpty(formBo.getLiabilityList())) {
             List<InsuranceProductLiability> liabilities = formBo.getLiabilityList().stream().map(bo -> {
                 InsuranceProductLiability entity = BeanUtil.copyProperties(bo, InsuranceProductLiability.class);
                 entity.setProductId(productId); // 强行绑定主键
@@ -666,6 +671,44 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         } else {
             detail.setId(existDetail.getId());
             detailMapper.updateById(detail);
+        }
+    }
+
+    private void validateCardSpecs(InsuranceProductSaveBo formBo) {
+        if (CollUtil.isEmpty(formBo.getCardSpecs())) {
+            throw new ServiceException("卡密产品至少需要配置一个商品规格");
+        }
+        boolean hasEnabledSpec = false;
+        for (InsuranceProductDetail.CardSpecItem spec : formBo.getCardSpecs()) {
+            if (StringUtils.isBlank(spec.getSpecName())) {
+                throw new ServiceException("卡密产品规格名称不能为空");
+            }
+            if (spec.getPrice() == null || spec.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new ServiceException("卡密产品规格售价不能小于0");
+            }
+            if (spec.getStock() == null || spec.getStock() < 0) {
+                throw new ServiceException("卡密产品规格库存不能小于0");
+            }
+            if (Objects.equals(spec.getStatus(), 0)) {
+                hasEnabledSpec = true;
+            }
+        }
+        if (!hasEnabledSpec) {
+            throw new ServiceException("卡密产品至少需要启用一个商品规格");
+        }
+    }
+
+    private void normalizeProductFreight(InsuranceProductConfigBo productBo) {
+        if ("collect".equals(productBo.getFreightPayType())) {
+            productBo.setFreight(BigDecimal.ZERO);
+            return;
+        }
+        productBo.setFreightPayType("prepaid");
+        if (productBo.getFreight() == null) {
+            productBo.setFreight(BigDecimal.ZERO);
+        }
+        if (productBo.getFreight().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ServiceException("卡密产品运费不能小于0");
         }
     }
 
@@ -755,7 +798,16 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             });
         }
 
-        // 3. 收集条款文件的 ID (之前已经写好防御了)
+        // 3. 收集朋友圈营销素材图片 ID
+        if (CollUtil.isNotEmpty(bo.getMarketingImages())) {
+            bo.getMarketingImages().forEach(idStr -> {
+                if (StringUtils.isNotBlank(idStr) && idStr.matches("\\d+")) {
+                    ossIdList.add(Long.valueOf(idStr));
+                }
+            });
+        }
+
+        // 4. 收集条款文件的 ID (之前已经写好防御了)
         if (CollUtil.isNotEmpty(bo.getClauseFiles())) {
             bo.getClauseFiles().forEach(clause -> {
                 if (StringUtils.isNotBlank(clause.getFileUrl()) && clause.getFileUrl().matches("\\d+")) {
@@ -787,6 +839,9 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             }
             if (CollUtil.isNotEmpty(bo.getClaimImages())) {
                 bo.setClaimImages(bo.getClaimImages().stream().map(id -> urlMap.getOrDefault(id, id)).collect(Collectors.toList()));
+            }
+            if (CollUtil.isNotEmpty(bo.getMarketingImages())) {
+                bo.setMarketingImages(bo.getMarketingImages().stream().map(id -> urlMap.getOrDefault(id, id)).collect(Collectors.toList()));
             }
 
             // 🌟 4. 新增：回写条款文件的真实 URL

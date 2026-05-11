@@ -127,6 +127,16 @@ public class InsuranceProductConfig extends TenantEntity {
 
     private Integer paymentMode;
 
+    /**
+     * 运费支付方式：prepaid-线上支付，collect-到付
+     */
+    private String freightPayType;
+
+    /**
+     * 运费金额
+     */
+    private BigDecimal freight;
+
 //    @TableField(typeHandler = JacksonTypeHandler.class)
 //    private List<ServiceFeeConfig> serviceFeeConfig;
 }
