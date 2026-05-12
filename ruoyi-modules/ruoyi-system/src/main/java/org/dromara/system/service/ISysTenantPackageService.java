@@ -56,6 +56,11 @@ public interface ISysTenantPackageService {
     int updatePackageStatus(SysTenantPackageBo bo);
 
     /**
+     * 批量同步套餐权限到使用该套餐的租户角色
+     */
+    Boolean syncPackageRoles(Long packageId);
+
+    /**
      * 校验并批量删除租户套餐信息
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);

@@ -128,6 +128,18 @@ public class SysTenantPackageController extends BaseController {
     }
 
     /**
+     * 批量同步套餐权限到使用该套餐的租户角色
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("system:tenantPackage:edit")
+    @Log(title = "租户套餐权限", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PostMapping("/syncRoles")
+    public R<Void> syncRoles(@RequestBody SysTenantPackageBo bo) {
+        return toAjax(tenantPackageService.syncPackageRoles(bo.getPackageId()));
+    }
+
+    /**
      * 删除租户套餐
      *
      * @param packageIds 主键串
