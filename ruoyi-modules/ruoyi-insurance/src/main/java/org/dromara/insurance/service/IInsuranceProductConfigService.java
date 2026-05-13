@@ -12,6 +12,7 @@ import org.dromara.insurance.domain.vo.MarketProductVo;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 产品配置Service接口
@@ -116,4 +117,19 @@ public interface IInsuranceProductConfigService {
      * @return 服务费配置列表 (结构化对象)
      */
     String getServiceFeeConfig(Long productId);
+
+    /**
+     * 将平台产品服务费配置同步到已添加该产品的租户佣金配置
+     *
+     * @param productIds 产品ID集合
+     * @return 同步统计
+     */
+    Map<String, Object> syncServiceFeeCommission(Collection<Long> productIds);
+
+    /**
+     * 将全部平台产品服务费配置同步到已添加产品的租户佣金配置
+     *
+     * @return 同步统计
+     */
+    Map<String, Object> syncAllServiceFeeCommission();
 }

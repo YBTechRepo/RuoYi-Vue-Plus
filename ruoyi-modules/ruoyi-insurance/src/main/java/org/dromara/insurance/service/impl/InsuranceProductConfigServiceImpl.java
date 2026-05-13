@@ -10,6 +10,7 @@ import org.dromara.commission.service.IBizCommissionProductService;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -21,19 +22,25 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.insurance.domain.InsuranceProductDetail;
 import org.dromara.insurance.domain.InsuranceProductLiability;
+import org.dromara.insurance.domain.InsuranceProductCommission;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
 import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
+import org.dromara.insurance.domain.bo.InsuranceProductCommissionBo;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
+import org.dromara.insurance.domain.bo.ProductCommissionConfig;
 import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.dromara.insurance.mapper.InsuranceProductDetailMapper;
 import org.dromara.insurance.mapper.InsuranceProductLiabilityMapper;
+import org.dromara.insurance.mapper.InsuranceProductCommissionMapper;
 import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsuranceProductCommissionService;
 import org.dromara.insurance.service.IInsuranceProductLiabilityService;
+import org.dromara.system.domain.SysTenant;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysOssVo;
+import org.dromara.system.mapper.SysTenantMapper;
 import org.dromara.system.service.ISysDeptService;
 import org.dromara.system.service.ISysOssService;
 import org.springframework.stereotype.Service;
@@ -61,6 +68,10 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
     private final InsuranceProductConfigMapper baseMapper;
 
     private final InsuranceTenantProductMapper insuranceTenantProductMapper;
+
+    private final InsuranceProductCommissionMapper insuranceProductCommissionMapper;
+
+    private final SysTenantMapper sysTenantMapper;
 
     private final InsuranceProductDetailMapper detailMapper;
 
@@ -764,6 +775,162 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                 .eq(InsuranceProductConfig::getTenantId, "000000"));
             return config != null ? config.getServiceFeeConfig() : null;
         });
+    }
+
+    @Override
+    public Map<String, Object> syncServiceFeeCommission(Collection<Long> productIds) {
+        if (CollUtil.isEmpty(productIds)) {
+            throw new ServiceException("请选择需要同步佣金的产品");
+        }
+
+        List<Long> distinctProductIds = productIds.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (CollUtil.isEmpty(distinctProductIds)) {
+            throw new ServiceException("请选择需要同步佣金的产品");
+        }
+
+        List<InsuranceProductConfig> products = TenantHelper.dynamic("000000", () -> baseMapper.selectBatchIds(distinctProductIds));
+        Map<Long, InsuranceProductConfig> productMap = products.stream()
+            .collect(Collectors.toMap(InsuranceProductConfig::getId, p -> p, (a, b) -> a));
+
+        Set<String> enabledTenantIds = TenantHelper.ignore(() -> sysTenantMapper.selectList(
+                Wrappers.<SysTenant>lambdaQuery()
+                    .select(SysTenant::getTenantId)
+                    .eq(SysTenant::getStatus, "0")
+            )).stream()
+            .map(SysTenant::getTenantId)
+            .filter(StringUtils::isNotBlank)
+            .filter(tenantId -> !"000000".equals(tenantId))
+            .collect(Collectors.toSet());
+
+        List<InsuranceTenantProduct> tenantProducts = TenantHelper.ignore(() -> insuranceTenantProductMapper.selectList(
+            Wrappers.<InsuranceTenantProduct>lambdaQuery()
+                .select(InsuranceTenantProduct::getTenantId, InsuranceTenantProduct::getProductId)
+                .in(InsuranceTenantProduct::getProductId, distinctProductIds)
+                .ne(InsuranceTenantProduct::getTenantId, "000000")
+        ));
+
+        Map<Long, Set<String>> productTenantMap = tenantProducts.stream()
+            .filter(item -> item.getProductId() != null)
+            .filter(item -> enabledTenantIds.contains(item.getTenantId()))
+            .collect(Collectors.groupingBy(
+                InsuranceTenantProduct::getProductId,
+                Collectors.mapping(InsuranceTenantProduct::getTenantId, Collectors.toSet())
+            ));
+
+        int successCount = 0;
+        int skippedCount = 0;
+        int failCount = 0;
+        Set<String> affectedTenantIds = new HashSet<>();
+
+        for (Long productId : distinctProductIds) {
+            InsuranceProductConfig product = productMap.get(productId);
+            if (product == null) {
+                skippedCount++;
+                continue;
+            }
+
+            Set<String> tenantIds = productTenantMap.get(productId);
+            if (CollUtil.isEmpty(tenantIds)) {
+                skippedCount++;
+                continue;
+            }
+
+            List<ProductCommissionConfig> commissionConfigs;
+            try {
+                commissionConfigs = buildCommissionConfigs(product.getServiceFeeConfig());
+            } catch (Exception e) {
+                log.warn("产品服务费配置解析失败，productId={}", productId, e);
+                skippedCount += tenantIds.size();
+                continue;
+            }
+            if (CollUtil.isEmpty(commissionConfigs)) {
+                skippedCount += tenantIds.size();
+                continue;
+            }
+
+            String commissionConfigJson = JsonUtils.toJsonString(commissionConfigs);
+            ProductCommissionConfig firstConfig = commissionConfigs.get(0);
+
+            for (String tenantId : tenantIds) {
+                try {
+                    TenantHelper.dynamic(tenantId, () -> {
+                        InsuranceProductCommission existing = insuranceProductCommissionMapper.selectOne(
+                            Wrappers.<InsuranceProductCommission>lambdaQuery()
+                                .eq(InsuranceProductCommission::getProductId, product.getId())
+                                .last("limit 1")
+                        );
+
+                        InsuranceProductCommissionBo bo = new InsuranceProductCommissionBo();
+                        bo.setProductId(product.getId());
+                        bo.setProductCode(product.getProductCode());
+                        bo.setProductName(product.getProductName());
+                        bo.setStatus(0);
+                        bo.setCommissionConfig(commissionConfigJson);
+                        bo.setCommissionRate(firstConfig.getCommissionRate());
+                        bo.setEffectiveTime(firstConfig.getEffectiveTime());
+                        bo.setExpirationTime(firstConfig.getExpirationTime());
+
+                        if (existing == null) {
+                            insuranceProductCommissionService.insertByBo(bo);
+                        } else {
+                            bo.setId(existing.getId());
+                            bo.setVersion(existing.getVersion());
+                            insuranceProductCommissionService.updateByBo(bo);
+                        }
+                        return null;
+                    });
+                    successCount++;
+                    affectedTenantIds.add(tenantId);
+                } catch (Exception e) {
+                    log.warn("同步租户佣金配置失败，tenantId={}, productId={}", tenantId, productId, e);
+                    failCount++;
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("productCount", distinctProductIds.size());
+        result.put("tenantCount", affectedTenantIds.size());
+        result.put("successCount", successCount);
+        result.put("skippedCount", skippedCount);
+        result.put("failCount", failCount);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> syncAllServiceFeeCommission() {
+        List<Long> productIds = TenantHelper.dynamic("000000", () -> baseMapper.selectObjs(
+                Wrappers.<InsuranceProductConfig>lambdaQuery()
+                    .select(InsuranceProductConfig::getId)
+            ).stream()
+            .filter(Objects::nonNull)
+            .map(item -> (Long) item)
+            .toList());
+        return syncServiceFeeCommission(productIds);
+    }
+
+    private List<ProductCommissionConfig> buildCommissionConfigs(String serviceFeeConfig) {
+        if (StringUtils.isBlank(serviceFeeConfig)) {
+            return Collections.emptyList();
+        }
+
+        List<ServiceFeeConfig> serviceFeeConfigs = JsonUtils.parseArray(serviceFeeConfig, ServiceFeeConfig.class);
+        if (CollUtil.isEmpty(serviceFeeConfigs)) {
+            return Collections.emptyList();
+        }
+
+        return serviceFeeConfigs.stream()
+            .map(item -> {
+                ProductCommissionConfig config = new ProductCommissionConfig();
+                config.setCommissionRate(item.getFeeRatio() == null ? BigDecimal.ZERO : item.getFeeRatio());
+                config.setEffectiveTime(item.getEffectiveStartTime());
+                config.setExpirationTime(item.getEffectiveEndTime());
+                return config;
+            })
+            .collect(Collectors.toList());
     }
 
     /**

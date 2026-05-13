@@ -1,13 +1,16 @@
 package org.dromara.insurance.controller;
 
 import java.util.List;
+import java.util.Map;
 
+import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaIgnore;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import org.dromara.common.core.constant.TenantConstants;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.MarketProductVo;
@@ -151,5 +154,28 @@ public class InsuranceProductConfigController extends BaseController {
     public R<String> getServiceFeeConfig(@PathVariable("id") Long id) {
         String configStr = insuranceProductConfigService.getServiceFeeConfig(id);
         return R.ok("获取成功", configStr);
+    }
+
+    /**
+     * 将产品服务费配置同步到各租户佣金配置
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:InsuranceProductConfig:syncCommission")
+    @Log(title = "产品配置同步佣金", businessType = BusinessType.UPDATE)
+    @PostMapping("/syncServiceFeeCommission")
+    public R<Map<String, Object>> syncServiceFeeCommission(@RequestBody Map<String, List<Long>> body) {
+        List<Long> productIds = body == null ? null : body.get("productIds");
+        return R.ok(insuranceProductConfigService.syncServiceFeeCommission(productIds));
+    }
+
+    /**
+     * 将全部产品服务费配置同步到各租户佣金配置
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:InsuranceProductConfig:syncCommission")
+    @Log(title = "产品配置同步全部佣金", businessType = BusinessType.UPDATE)
+    @PostMapping("/syncAllServiceFeeCommission")
+    public R<Map<String, Object>> syncAllServiceFeeCommission() {
+        return R.ok(insuranceProductConfigService.syncAllServiceFeeCommission());
     }
 }
