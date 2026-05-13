@@ -20,7 +20,9 @@ import org.dromara.common.core.validate.AddGroup;
 import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.excel.utils.ExcelUtil;
+import cn.hutool.core.bean.BeanUtil;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
+import org.dromara.insurance.domain.vo.InsuranceProxyOrderExportVo;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.insurance.service.IInsuranceProxyOrderService;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -75,7 +77,8 @@ public class InsuranceProxyOrderController extends BaseController {
     @PostMapping("/export")
     public void export(InsuranceApplyRecordBo bo, HttpServletResponse response) {
         List<InsuranceApplyRecordVo> list = insuranceProxyOrderService.exportList(bo);
-        ExcelUtil.exportExcel(list, "代投保订单", InsuranceApplyRecordVo.class, response);
+        List<InsuranceProxyOrderExportVo> exportList = BeanUtil.copyToList(list, InsuranceProxyOrderExportVo.class);
+        ExcelUtil.exportExcel(exportList, "代投保订单", InsuranceProxyOrderExportVo.class, response);
     }
 
     /**

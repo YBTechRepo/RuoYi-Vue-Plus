@@ -3,4 +3,106 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.insurance.mapper.InsurancePolicyMapper">
+    <sql id="selectAdminInsurancePolicyVo">
+        select
+            p.id,
+            p.tenant_id as tenantId,
+            t.company_name as tenantName,
+            p.product_id as productId,
+            p.product_code as productCode,
+            p.product_name as productName,
+            p.policy_no as policyNo,
+            p.order_no as orderNo,
+            p.agent_name as agentName,
+            p.agent_user_id as agentUserId,
+            p.agent_dept_id as agentDeptId,
+            p.premium,
+            p.amt,
+            p.commission_status as commissionStatus,
+            p.status,
+            p.appnt_date as appntDate,
+            p.accecpt_date as accecptDate,
+            p.policy_invalid_date as policyInvalidDate,
+            p.policy_start_date as policyStartDate,
+            p.policy_end_date as policyEndDate,
+            p.applicant_name as applicantName,
+            p.applicant_sex as applicantSex,
+            p.applicant_id_no as applicantIdNo,
+            p.applicant_id_type as applicantIdType,
+            p.applicant_mobile as applicantMobile,
+            p.relationship_to_insured as relationshipToInsured,
+            p.insured_name as insuredName,
+            p.insured_sex as insuredSex,
+            p.insured_id_no as insuredIdNo,
+            p.insured_id_type as insuredIdType,
+            p.insured_mobile as insuredMobile,
+            p.del_flag as delFlag,
+            p.version
+        from biz_insurance_policy p
+        left join sys_tenant t on t.tenant_id = p.tenant_id
+    </sql>
+
+    <sql id="adminWhere">
+        where p.del_flag = '0'
+        <if test="bo != null">
+            <if test="bo.tenantId != null and bo.tenantId != ''">
+                and p.tenant_id = #{bo.tenantId}
+            </if>
+            <if test="bo.tenantName != null and bo.tenantName != ''">
+                and t.company_name like concat('%', #{bo.tenantName}, '%')
+            </if>
+            <if test="bo.productCode != null and bo.productCode != ''">
+                and p.product_code = #{bo.productCode}
+            </if>
+            <if test="bo.productName != null and bo.productName != ''">
+                and p.product_name like concat('%', #{bo.productName}, '%')
+            </if>
+            <if test="bo.policyNo != null and bo.policyNo != ''">
+                and p.policy_no = #{bo.policyNo}
+            </if>
+            <if test="bo.orderNo != null and bo.orderNo != ''">
+                and p.order_no = #{bo.orderNo}
+            </if>
+            <if test="bo.agentName != null and bo.agentName != ''">
+                and p.agent_name like concat('%', #{bo.agentName}, '%')
+            </if>
+            <if test="bo.premium != null">
+                and p.premium = #{bo.premium}
+            </if>
+            <if test="bo.amt != null">
+                and p.amt = #{bo.amt}
+            </if>
+            <if test="bo.commissionStatus != null">
+                and p.commission_status = #{bo.commissionStatus}
+            </if>
+            <if test="bo.status != null">
+                and p.status = #{bo.status}
+            </if>
+            <if test="bo.appntDate != null">
+                and p.appnt_date = #{bo.appntDate}
+            </if>
+            <if test="bo.applicantName != null and bo.applicantName != ''">
+                and p.applicant_name like concat('%', #{bo.applicantName}, '%')
+            </if>
+        </if>
+    </sql>
+
+    <select id="selectAdminVoById" resultType="org.dromara.insurance.domain.vo.InsurancePolicyVo">
+        <include refid="selectAdminInsurancePolicyVo"/>
+        where p.del_flag = '0'
+          and p.id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectAdminVoPage" resultType="org.dromara.insurance.domain.vo.InsurancePolicyVo">
+        <include refid="selectAdminInsurancePolicyVo"/>
+        <include refid="adminWhere"/>
+        order by p.id desc
+    </select>
+
+    <select id="selectAdminVoList" resultType="org.dromara.insurance.domain.vo.InsurancePolicyVo">
+        <include refid="selectAdminInsurancePolicyVo"/>
+        <include refid="adminWhere"/>
+        order by p.id desc
+    </select>
 </mapper>

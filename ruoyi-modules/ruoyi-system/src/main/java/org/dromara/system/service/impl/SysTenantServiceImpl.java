@@ -601,6 +601,28 @@ public class SysTenantServiceImpl implements ISysTenantService {
     }
 
     /**
+     * 刷新所有租户字典缓存
+     */
+    @Override
+    public void refreshAllTenantDictCache() {
+        List<String> tenantIds = TenantHelper.ignore(() -> baseMapper.selectObjs(
+            new LambdaQueryWrapper<SysTenant>().select(SysTenant::getTenantId)
+                .eq(SysTenant::getStatus, SystemConstants.NORMAL), x -> {
+                return Convert.toStr(x);
+            }));
+
+        Set<String> allTenantIds = new HashSet<>(tenantIds);
+        allTenantIds.add(TenantConstants.DEFAULT_TENANT_ID);
+
+        for (String tenantId : allTenantIds) {
+            TenantHelper.dynamic(tenantId, () -> {
+                CacheUtils.clear(CacheNames.SYS_DICT);
+                CacheUtils.clear(CacheNames.SYS_DICT_TYPE);
+            });
+        }
+    }
+
+    /**
      * 同步租户参数配置
      */
     @Transactional(rollbackFor = Exception.class)

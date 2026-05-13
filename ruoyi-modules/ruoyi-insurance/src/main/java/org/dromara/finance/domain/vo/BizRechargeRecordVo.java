@@ -35,6 +35,18 @@ public class BizRechargeRecordVo implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 租户号
+     */
+    @ExcelProperty(value = "租户号")
+    private String tenantId;
+
+    /**
+     * 租户名称
+     */
+    @ExcelProperty(value = "租户名称")
+    private String tenantName;
+
+    /**
      * id
      */
     //@ExcelProperty(value = "id")

@@ -82,7 +82,7 @@ public class BizRechargeRecordController extends BaseController {
     @Log(title = "充值申请", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(BizRechargeRecordBo bo, HttpServletResponse response) {
-        List<BizRechargeRecordVo> list = bizRechargeRecordService.queryList(bo);
+        List<BizRechargeRecordVo> list = bizRechargeRecordService.queryAdminList(bo);
         ExcelUtil.exportExcel(list, "充值申请", BizRechargeRecordVo.class, response);
     }
 

@@ -44,6 +44,11 @@ public interface IBizRechargeRecordService {
     List<BizRechargeRecordVo> queryList(BizRechargeRecordBo bo);
 
     /**
+     * 查询符合条件的充值申请列表（管理端）
+     */
+    List<BizRechargeRecordVo> queryAdminList(BizRechargeRecordBo bo);
+
+    /**
      * 新增充值申请
      *
      * @param bo 充值申请

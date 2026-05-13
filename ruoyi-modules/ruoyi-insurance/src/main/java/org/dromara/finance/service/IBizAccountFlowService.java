@@ -42,6 +42,11 @@ public interface IBizAccountFlowService {
     List<BizAccountFlowVo> queryList(BizAccountFlowBo bo);
 
     /**
+     * 查询符合条件的账户明细列表（管理端）
+     */
+    List<BizAccountFlowVo> queryAdminList(BizAccountFlowBo bo);
+
+    /**
      * 新增账户明细
      *
      * @param bo 账户明细

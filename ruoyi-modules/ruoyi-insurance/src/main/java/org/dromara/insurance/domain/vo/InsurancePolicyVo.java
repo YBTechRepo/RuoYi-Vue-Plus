@@ -38,6 +38,18 @@ public class InsurancePolicyVo implements Serializable {
     private Long id;
 
     /**
+     * 租户编号
+     */
+    @ExcelProperty(value = "租户编号")
+    private String tenantId;
+
+    /**
+     * 租户名称
+     */
+    @ExcelProperty(value = "租户名称")
+    private String tenantName;
+
+    /**
      * 产品id
      */
     @ExcelProperty(value = "产品id")

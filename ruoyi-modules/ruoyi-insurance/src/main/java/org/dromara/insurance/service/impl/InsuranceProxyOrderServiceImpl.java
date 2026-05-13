@@ -21,6 +21,8 @@ import org.dromara.insurance.mapper.InsuranceApplyRecordMapper;
 import org.dromara.insurance.mapper.InsuranceOrderApplicantMapper;
 import org.dromara.insurance.mapper.InsuranceOrderInsuredMapper;
 import org.dromara.insurance.service.IInsuranceProxyOrderService;
+import org.dromara.system.domain.vo.SysTenantVo;
+import org.dromara.system.service.ISysTenantService;
 
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
     private final InsuranceApplyRecordMapper baseMapper;
     private final InsuranceOrderApplicantMapper applicantMapper;
     private final InsuranceOrderInsuredMapper insuredMapper;
+    private final ISysTenantService sysTenantService;
 
     /**
      * 查询代投保订单查询
@@ -52,9 +55,13 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
      */
     @Override
     public InsuranceApplyRecordVo queryById(Long id){
-        return TenantHelper.ignore(() -> baseMapper.selectVoOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
-            .eq(InsuranceApplyRecord::getId, id)
-            .eq(InsuranceApplyRecord::getInsureMode, 1)));
+        return TenantHelper.ignore(() -> {
+            InsuranceApplyRecordVo vo = baseMapper.selectVoOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                .eq(InsuranceApplyRecord::getId, id)
+                .eq(InsuranceApplyRecord::getInsureMode, 1));
+            fillTenantName(vo);
+            return vo;
+        });
     }
 
     /**
@@ -69,6 +76,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
         return TenantHelper.ignore(() -> {
             LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
             Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+            fillTenantNames(result.getRecords());
             return TableDataInfo.build(result);
         });
     }
@@ -83,7 +91,9 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
     public List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo) {
         return TenantHelper.ignore(() -> {
             LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
-            return baseMapper.selectVoList(lqw);
+            List<InsuranceApplyRecordVo> list = baseMapper.selectVoList(lqw);
+            fillTenantNames(list);
+            return list;
         });
     }
 
@@ -114,6 +124,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
             }
 
             List<InsuranceApplyRecordVo> list = baseMapper.selectVoList(lqw);
+            fillTenantNames(list);
 
             // 补充投被保人信息
             for (InsuranceApplyRecordVo vo : list) {
@@ -235,6 +246,41 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
         }
 
         return lqw;
+    }
+
+    /**
+     * 补充租户名称
+     */
+    private void fillTenantName(InsuranceApplyRecordVo vo) {
+        if (vo == null || StringUtils.isBlank(vo.getTenantId())) {
+            return;
+        }
+        SysTenantVo tenant = sysTenantService.queryByTenantId(vo.getTenantId());
+        if (tenant != null) {
+            vo.setTenantName(tenant.getCompanyName());
+        }
+    }
+
+    /**
+     * 批量补充租户名称
+     */
+    private void fillTenantNames(List<InsuranceApplyRecordVo> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<String, String> tenantNameMap = new HashMap<>();
+        for (InsuranceApplyRecordVo vo : list) {
+            if (vo == null || StringUtils.isBlank(vo.getTenantId()) || tenantNameMap.containsKey(vo.getTenantId())) {
+                continue;
+            }
+            SysTenantVo tenant = sysTenantService.queryByTenantId(vo.getTenantId());
+            tenantNameMap.put(vo.getTenantId(), tenant != null ? tenant.getCompanyName() : "");
+        }
+        for (InsuranceApplyRecordVo vo : list) {
+            if (vo != null && StringUtils.isNotBlank(vo.getTenantId())) {
+                vo.setTenantName(tenantNameMap.get(vo.getTenantId()));
+            }
+        }
     }
 
     /**

@@ -86,6 +86,11 @@ public interface ISysTenantService {
     void syncTenantDict();
 
     /**
+     * 刷新所有租户字典缓存
+     */
+    void refreshAllTenantDictCache();
+
+    /**
      * 同步租户参数配置
      */
     void syncTenantConfig();

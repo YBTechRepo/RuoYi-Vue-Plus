@@ -68,7 +68,7 @@ public class BizAccountFlowController extends BaseController {
     @Log(title = "账户明细", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(BizAccountFlowBo bo, HttpServletResponse response) {
-        List<BizAccountFlowVo> list = bizAccountFlowService.queryList(bo);
+        List<BizAccountFlowVo> list = bizAccountFlowService.queryAdminList(bo);
         ExcelUtil.exportExcel(list, "账户明细", BizAccountFlowVo.class, response);
     }
 

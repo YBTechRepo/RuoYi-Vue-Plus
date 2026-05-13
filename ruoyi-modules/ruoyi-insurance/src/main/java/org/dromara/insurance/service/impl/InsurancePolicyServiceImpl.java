@@ -9,6 +9,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import org.dromara.common.tenant.helper.TenantHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,17 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
     }
 
     /**
+     * 平台查询承保保单
+     *
+     * @param id 主键
+     * @return 承保保单
+     */
+    @Override
+    public InsurancePolicyVo queryAdminById(Long id) {
+        return TenantHelper.ignore(() -> baseMapper.selectAdminVoById(id));
+    }
+
+    /**
      * 分页查询承保保单列表
      *
      * @param bo        查询条件
@@ -69,6 +81,19 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
     }
 
     /**
+     * 平台分页查询承保保单列表
+     *
+     * @param bo        查询条件
+     * @param pageQuery 分页参数
+     * @return 承保保单分页列表
+     */
+    @Override
+    public TableDataInfo<InsurancePolicyVo> queryAdminPageList(InsurancePolicyBo bo, PageQuery pageQuery) {
+        Page<InsurancePolicyVo> result = TenantHelper.ignore(() -> baseMapper.selectAdminVoPage(pageQuery.build(), bo));
+        return TableDataInfo.build(result);
+    }
+
+    /**
      * 查询符合条件的承保保单列表
      *
      * @param bo 查询条件
@@ -82,6 +107,17 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
     public List<InsurancePolicyVo> queryList(InsurancePolicyBo bo) {
         LambdaQueryWrapper<InsurancePolicy> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);
+    }
+
+    /**
+     * 平台查询符合条件的承保保单列表
+     *
+     * @param bo 查询条件
+     * @return 承保保单列表
+     */
+    @Override
+    public List<InsurancePolicyVo> queryAdminList(InsurancePolicyBo bo) {
+        return TenantHelper.ignore(() -> baseMapper.selectAdminVoList(bo));
     }
 
     private LambdaQueryWrapper<InsurancePolicy> buildQueryWrapper(InsurancePolicyBo bo) {

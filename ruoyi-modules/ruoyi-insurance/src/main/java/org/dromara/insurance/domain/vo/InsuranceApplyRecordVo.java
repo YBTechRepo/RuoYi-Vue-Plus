@@ -36,6 +36,16 @@ public class InsuranceApplyRecordVo implements Serializable {
     private Long id;
 
     /**
+     * 租户编号
+     */
+    private String tenantId;
+
+    /**
+     * 租户名称
+     */
+    private String tenantName;
+
+    /**
      * 订单号
      */
     @ExcelProperty(value = "订单号")

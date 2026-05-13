@@ -199,6 +199,21 @@ public class SysTenantController extends BaseController {
     }
 
     /**
+     * 刷新所有租户字典缓存
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @Log(title = "租户管理", businessType = BusinessType.CLEAN)
+    @Lock4j
+    @DeleteMapping("/refreshAllTenantDictCache")
+    public R<Void> refreshAllTenantDictCache() {
+        if (!TenantHelper.isEnable()) {
+            return R.fail("当前未开启租户模式");
+        }
+        tenantService.refreshAllTenantDictCache();
+        return R.ok("刷新所有租户字典缓存成功");
+    }
+
+    /**
      * 同步租户参数配置
      */
     @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)

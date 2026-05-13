@@ -23,7 +23,7 @@ public interface BizUserAccountMapper extends BaseMapperPlus<BizUserAccount, Biz
      * 【财务总后台专用】忽略租户隔离，查询全量用户资金账户
      */
     @InterceptorIgnore(tenantLine = "true")
-    @Select("SELECT * FROM biz_user_account ${ew.customSqlSegment}")
+    @Select("SELECT bua.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = bua.tenant_id LIMIT 1) AS tenant_name FROM biz_user_account bua ${ew.customSqlSegment}")
     Page<BizUserAccountVo> selectAdminVoPage(@Param("page") Page<BizUserAccount> page, @Param(Constants.WRAPPER) Wrapper<BizUserAccount> queryWrapper);
 
 
@@ -31,6 +31,6 @@ public interface BizUserAccountMapper extends BaseMapperPlus<BizUserAccount, Biz
      * 【财务总后台专用】忽略租户隔离，查询全量用户资金账户列表（不分页，主要用于导出Excel）
      */
     @InterceptorIgnore(tenantLine = "true")
-    @Select("SELECT * FROM biz_user_account ${ew.customSqlSegment}")
+    @Select("SELECT bua.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = bua.tenant_id LIMIT 1) AS tenant_name FROM biz_user_account bua ${ew.customSqlSegment}")
     List<BizUserAccountVo> selectAdminVoList(@Param(Constants.WRAPPER) Wrapper<BizUserAccount> queryWrapper);
 }

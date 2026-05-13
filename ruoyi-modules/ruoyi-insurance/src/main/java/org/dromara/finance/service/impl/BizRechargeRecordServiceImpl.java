@@ -212,6 +212,12 @@ public class BizRechargeRecordServiceImpl implements IBizRechargeRecordService {
     }
 
     @Override
+    public List<BizRechargeRecordVo> queryAdminList(BizRechargeRecordBo bo) {
+        LambdaQueryWrapper<BizRechargeRecord> lqw = buildAdminQueryWrapper(bo);
+        return baseMapper.selectAdminVoList(lqw);
+    }
+
+    @Override
     public BizRechargeRecordVo queryAdminById(Long id) {
         return TenantHelper.ignore(() -> baseMapper.selectVoById(id));
     }

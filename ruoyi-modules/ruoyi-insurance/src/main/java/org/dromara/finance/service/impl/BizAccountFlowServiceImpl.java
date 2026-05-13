@@ -151,6 +151,13 @@ public class BizAccountFlowServiceImpl implements IBizAccountFlowService {
     }
 
     @Override
+    public List<BizAccountFlowVo> queryAdminList(BizAccountFlowBo bo) {
+        LambdaQueryWrapper<BizAccountFlow> lqw = buildQueryWrapper(bo);
+        lqw.orderByDesc(BizAccountFlow::getCreateTime);
+        return baseMapper.selectAdminVoList(lqw);
+    }
+
+    @Override
     public List<BizAccountFlowVo> queryUserAccountFlow(BizAccountFlowBo bo) {
         Long currentLoginId = LoginHelper.getUserId();
         if (!currentLoginId.equals(bo.getUserId())) {

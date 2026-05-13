@@ -206,4 +206,9 @@ public class InsurancePolicyBo extends BaseEntity {
 
     private String tenantId;
 
+    /**
+     * 租户名称
+     */
+    private String tenantName;
+
 }

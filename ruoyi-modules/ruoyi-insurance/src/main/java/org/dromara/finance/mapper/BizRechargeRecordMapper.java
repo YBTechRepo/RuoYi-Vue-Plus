@@ -23,6 +23,13 @@ public interface BizRechargeRecordMapper extends BaseMapperPlus<BizRechargeRecor
      * 这里的 ${ew.customSqlSegment} 会自动替换为 Service 层传来的 Wrapper 条件！
      */
     @InterceptorIgnore(tenantLine = "true")
-    @Select("SELECT * FROM biz_recharge_record ${ew.customSqlSegment}")
+    @Select("SELECT brr.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = brr.tenant_id LIMIT 1) AS tenant_name FROM biz_recharge_record brr ${ew.customSqlSegment}")
     Page<BizRechargeRecordVo> selectAdminVoPage(@Param("page") Page<BizRechargeRecord> page, @Param(Constants.WRAPPER) Wrapper<BizRechargeRecord> queryWrapper);
+
+    /**
+     * 【财务后台专用】无视多租户，查全盘数据列表（导出使用）
+     */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("SELECT brr.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = brr.tenant_id LIMIT 1) AS tenant_name FROM biz_recharge_record brr ${ew.customSqlSegment}")
+    java.util.List<BizRechargeRecordVo> selectAdminVoList(@Param(Constants.WRAPPER) Wrapper<BizRechargeRecord> queryWrapper);
 }

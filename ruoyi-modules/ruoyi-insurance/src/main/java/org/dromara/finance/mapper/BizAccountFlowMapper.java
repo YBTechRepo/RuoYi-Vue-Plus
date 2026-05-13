@@ -24,5 +24,13 @@ public interface BizAccountFlowMapper extends BaseMapperPlus<BizAccountFlow, Biz
      * 【管理员专用】忽略租户隔离，查询全量资金流水
      */
     @InterceptorIgnore(tenantLine = "true")
-    @Select("SELECT * FROM biz_account_flow ${ew.customSqlSegment}")
-    Page<BizAccountFlowVo> selectAdminVoPage(@Param("page") Page<BizAccountFlow> page, @Param(Constants.WRAPPER) Wrapper<BizAccountFlow> queryWrapper);}
+    @Select("SELECT baf.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = baf.tenant_id LIMIT 1) AS tenant_name FROM biz_account_flow baf ${ew.customSqlSegment}")
+    Page<BizAccountFlowVo> selectAdminVoPage(@Param("page") Page<BizAccountFlow> page, @Param(Constants.WRAPPER) Wrapper<BizAccountFlow> queryWrapper);
+
+    /**
+     * 【管理员专用】忽略租户隔离，查询全量资金流水列表（导出使用）
+     */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("SELECT baf.*, (SELECT st.company_name FROM sys_tenant st WHERE st.tenant_id = baf.tenant_id LIMIT 1) AS tenant_name FROM biz_account_flow baf ${ew.customSqlSegment}")
+    java.util.List<BizAccountFlowVo> selectAdminVoList(@Param(Constants.WRAPPER) Wrapper<BizAccountFlow> queryWrapper);
+}

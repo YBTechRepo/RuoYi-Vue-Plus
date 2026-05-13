@@ -32,6 +32,9 @@ public class InsuranceCardOrderVo implements Serializable {
     @ExcelProperty(value = "租户编号")
     private String tenantId;
 
+    @ExcelProperty(value = "租户名称")
+    private String tenantName;
+
     @ExcelProperty(value = "订单号")
     private String orderNo;
 

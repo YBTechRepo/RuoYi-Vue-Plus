@@ -26,6 +26,14 @@ public interface IInsurancePolicyService {
     InsurancePolicyVo queryById(Long id);
 
     /**
+     * 平台查询承保保单
+     *
+     * @param id 主键
+     * @return 承保保单
+     */
+    InsurancePolicyVo queryAdminById(Long id);
+
+    /**
      * 分页查询承保保单列表
      *
      * @param bo        查询条件
@@ -35,12 +43,29 @@ public interface IInsurancePolicyService {
     TableDataInfo<InsurancePolicyVo> queryPageList(InsurancePolicyBo bo, PageQuery pageQuery);
 
     /**
+     * 平台分页查询承保保单列表
+     *
+     * @param bo        查询条件
+     * @param pageQuery 分页参数
+     * @return 承保保单分页列表
+     */
+    TableDataInfo<InsurancePolicyVo> queryAdminPageList(InsurancePolicyBo bo, PageQuery pageQuery);
+
+    /**
      * 查询符合条件的承保保单列表
      *
      * @param bo 查询条件
      * @return 承保保单列表
      */
     List<InsurancePolicyVo> queryList(InsurancePolicyBo bo);
+
+    /**
+     * 平台查询符合条件的承保保单列表
+     *
+     * @param bo 查询条件
+     * @return 承保保单列表
+     */
+    List<InsurancePolicyVo> queryAdminList(InsurancePolicyBo bo);
 
     /**
      * 新增承保保单

@@ -23,6 +23,8 @@ import org.dromara.insurance.domain.vo.InsuranceCardOrderVo;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.mapper.InsuranceCardOrderMapper;
 import org.dromara.insurance.service.IInsuranceCardOrderService;
+import org.dromara.system.domain.vo.SysTenantVo;
+import org.dromara.system.service.ISysTenantService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,8 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
 
     private final IBizUserAccountService userAccountService;
 
+    private final ISysTenantService sysTenantService;
+
     @Override
     @DataPermission({
         @DataColumn(key = "deptName", value = "create_dept"),
@@ -62,7 +66,11 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
 
     @Override
     public InsuranceCardOrderVo queryAdminById(Long id) {
-        return TenantHelper.ignore(() -> baseMapper.selectVoById(id));
+        return TenantHelper.ignore(() -> {
+            InsuranceCardOrderVo vo = baseMapper.selectVoById(id);
+            fillTenantName(vo);
+            return vo;
+        });
     }
 
     @Override
@@ -104,14 +112,19 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
     @Override
     public TableDataInfo<InsuranceCardOrderVo> queryAdminPageList(InsuranceCardOrderBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsuranceCardOrder> lqw = buildQueryWrapper(bo);
+        lqw.in(InsuranceCardOrder::getStatus, 0, 5);
         Page<InsuranceCardOrderVo> result = TenantHelper.ignore(() -> baseMapper.selectVoPage(pageQuery.build(), lqw));
+        fillTenantNames(result.getRecords());
         return TableDataInfo.build(result);
     }
 
     @Override
     public List<InsuranceCardOrderVo> queryAdminList(InsuranceCardOrderBo bo) {
         LambdaQueryWrapper<InsuranceCardOrder> lqw = buildQueryWrapper(bo);
-        return TenantHelper.ignore(() -> baseMapper.selectVoList(lqw));
+        lqw.in(InsuranceCardOrder::getStatus, 0, 5);
+        List<InsuranceCardOrderVo> list = TenantHelper.ignore(() -> baseMapper.selectVoList(lqw));
+        fillTenantNames(list);
+        return list;
     }
 
     private LambdaQueryWrapper<InsuranceCardOrder> buildQueryWrapper(InsuranceCardOrderBo bo) {
@@ -129,6 +142,41 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
         lqw.eq(StringUtils.isNotBlank(bo.getSelectedCompanyCode()), InsuranceCardOrder::getSelectedCompanyCode, bo.getSelectedCompanyCode());
         lqw.eq(StringUtils.isNotBlank(bo.getExpressNo()), InsuranceCardOrder::getExpressNo, bo.getExpressNo());
         return lqw;
+    }
+
+    /**
+     * 补充租户名称
+     */
+    private void fillTenantName(InsuranceCardOrderVo vo) {
+        if (vo == null || StringUtils.isBlank(vo.getTenantId())) {
+            return;
+        }
+        SysTenantVo tenant = sysTenantService.queryByTenantId(vo.getTenantId());
+        if (tenant != null) {
+            vo.setTenantName(tenant.getCompanyName());
+        }
+    }
+
+    /**
+     * 批量补充租户名称
+     */
+    private void fillTenantNames(List<InsuranceCardOrderVo> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<String, String> tenantNameMap = new java.util.HashMap<>();
+        for (InsuranceCardOrderVo vo : list) {
+            if (vo == null || StringUtils.isBlank(vo.getTenantId()) || tenantNameMap.containsKey(vo.getTenantId())) {
+                continue;
+            }
+            SysTenantVo tenant = sysTenantService.queryByTenantId(vo.getTenantId());
+            tenantNameMap.put(vo.getTenantId(), tenant != null ? tenant.getCompanyName() : "");
+        }
+        for (InsuranceCardOrderVo vo : list) {
+            if (vo != null && StringUtils.isNotBlank(vo.getTenantId())) {
+                vo.setTenantName(tenantNameMap.get(vo.getTenantId()));
+            }
+        }
     }
 
     @Override
