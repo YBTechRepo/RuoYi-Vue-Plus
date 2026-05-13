@@ -14,6 +14,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import org.dromara.common.tenant.helper.TenantHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.insurance.domain.InsuranceProductCommission;
@@ -78,6 +79,19 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
     }
 
     /**
+     * 平台分页查询佣金分配明细列表
+     *
+     * @param bo        查询条件
+     * @param pageQuery 分页参数
+     * @return 佣金分配明细分页列表
+     */
+    @Override
+    public TableDataInfo<BizCommissionRecordVo> queryAdminPageList(BizCommissionRecordBo bo, PageQuery pageQuery) {
+        Page<BizCommissionRecordVo> result = TenantHelper.ignore(() -> baseMapper.selectAdminVoPage(pageQuery.build(), bo));
+        return TableDataInfo.build(result);
+    }
+
+    /**
      * 查询符合条件的佣金分配明细列表
      *
      * @param bo 查询条件
@@ -87,6 +101,17 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
     public List<BizCommissionRecordVo> queryList(BizCommissionRecordBo bo) {
         LambdaQueryWrapper<BizCommissionRecord> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);
+    }
+
+    /**
+     * 平台查询符合条件的佣金分配明细列表
+     *
+     * @param bo 查询条件
+     * @return 佣金分配明细列表
+     */
+    @Override
+    public List<BizCommissionRecordVo> queryAdminList(BizCommissionRecordBo bo) {
+        return TenantHelper.ignore(() -> baseMapper.selectAdminVoList(bo));
     }
 
     private LambdaQueryWrapper<BizCommissionRecord> buildQueryWrapper(BizCommissionRecordBo bo) {

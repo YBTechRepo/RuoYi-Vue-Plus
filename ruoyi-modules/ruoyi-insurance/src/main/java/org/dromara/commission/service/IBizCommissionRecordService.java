@@ -38,12 +38,29 @@ public interface IBizCommissionRecordService {
     TableDataInfo<BizCommissionRecordVo> queryPageList(BizCommissionRecordBo bo, PageQuery pageQuery);
 
     /**
+     * 平台分页查询佣金分配明细列表
+     *
+     * @param bo        查询条件
+     * @param pageQuery 分页参数
+     * @return 佣金分配明细分页列表
+     */
+    TableDataInfo<BizCommissionRecordVo> queryAdminPageList(BizCommissionRecordBo bo, PageQuery pageQuery);
+
+    /**
      * 查询符合条件的佣金分配明细列表
      *
      * @param bo 查询条件
      * @return 佣金分配明细列表
      */
     List<BizCommissionRecordVo> queryList(BizCommissionRecordBo bo);
+
+    /**
+     * 平台查询符合条件的佣金分配明细列表
+     *
+     * @param bo 查询条件
+     * @return 佣金分配明细列表
+     */
+    List<BizCommissionRecordVo> queryAdminList(BizCommissionRecordBo bo);
 
     /**
      * 新增佣金分配明细

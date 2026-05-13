@@ -4,10 +4,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Param;
 import org.dromara.commission.domain.BizCommissionRecord;
 import org.dromara.commission.domain.bo.AppCommissionQueryBo;
+import org.dromara.commission.domain.bo.BizCommissionRecordBo;
 import org.dromara.commission.domain.vo.AppCommissionItemVo;
 import org.dromara.commission.domain.vo.BizCommissionRecordVo;
 import org.dromara.commission.domain.vo.CommissionSummaryVo;
 import org.dromara.common.mybatis.core.mapper.BaseMapperPlus;
+
+import java.util.List;
 
 /**
  * 佣金分配明细Mapper接口
@@ -16,6 +19,18 @@ import org.dromara.common.mybatis.core.mapper.BaseMapperPlus;
  * @date 2026-03-11
  */
 public interface BizCommissionRecordMapper extends BaseMapperPlus<BizCommissionRecord, BizCommissionRecordVo> {
+
+    /**
+     * 平台分页查询全量佣金分配明细
+     */
+    Page<BizCommissionRecordVo> selectAdminVoPage(Page<BizCommissionRecordVo> page,
+                                                  @Param("bo") BizCommissionRecordBo bo);
+
+    /**
+     * 平台查询全量佣金分配明细列表（导出使用）
+     */
+    List<BizCommissionRecordVo> selectAdminVoList(@Param("bo") BizCommissionRecordBo bo);
+
     /**
      * 1. APP端：获取佣金头部汇总看板数据
      */

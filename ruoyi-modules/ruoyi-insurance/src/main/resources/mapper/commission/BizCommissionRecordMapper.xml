@@ -3,6 +3,71 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.commission.mapper.BizCommissionRecordMapper">
+    <sql id="selectAdminBizCommissionRecordVo">
+        select
+            r.id,
+            r.tenant_id as tenantId,
+            t.company_name as tenantName,
+            r.policy_id as policyId,
+            r.policy_no as policyNo,
+            r.product_id as productId,
+            r.product_name as productName,
+            r.premium,
+            r.commission_base as commissionBase,
+            r.sales_user_id as salesUserId,
+            r.sales_amount as salesAmount,
+            r.team_user_id as teamUserId,
+            r.team_amount as teamAmount,
+            r.project_user_id as projectUserId,
+            r.project_amount as projectAmount,
+            r.calc_strategy as calcStrategy,
+            r.status,
+            r.version,
+            r.del_flag as delFlag,
+            r.create_time as createTime,
+            r.sales_ratio as salesRatio,
+            r.team_ratio as teamRatio,
+            r.project_ratio as projectRatio,
+            r.sales_user_name as salesUserName,
+            r.team_user_name as teamUserName,
+            r.project_user_name as projectUserName,
+            r.sales_status as salesStatus,
+            r.team_status as teamStatus,
+            r.project_status as projectStatus
+        from biz_commission_record r
+        left join sys_tenant t on t.tenant_id = r.tenant_id
+    </sql>
+
+    <sql id="adminWhere">
+        where r.del_flag = '0'
+        <if test="bo != null">
+            <if test="bo.tenantId != null and bo.tenantId != ''">
+                and r.tenant_id = #{bo.tenantId}
+            </if>
+            <if test="bo.policyNo != null and bo.policyNo != ''">
+                and r.policy_no = #{bo.policyNo}
+            </if>
+            <if test="bo.params != null and bo.params.beginTime != null and bo.params.beginTime != ''">
+                and date_format(r.create_time, '%Y%m%d') &gt;= date_format(#{bo.params.beginTime}, '%Y%m%d')
+            </if>
+            <if test="bo.params != null and bo.params.endTime != null and bo.params.endTime != ''">
+                and date_format(r.create_time, '%Y%m%d') &lt;= date_format(#{bo.params.endTime}, '%Y%m%d')
+            </if>
+        </if>
+    </sql>
+
+    <select id="selectAdminVoPage" resultType="org.dromara.commission.domain.vo.BizCommissionRecordVo">
+        <include refid="selectAdminBizCommissionRecordVo"/>
+        <include refid="adminWhere"/>
+        order by r.id desc
+    </select>
+
+    <select id="selectAdminVoList" resultType="org.dromara.commission.domain.vo.BizCommissionRecordVo">
+        <include refid="selectAdminBizCommissionRecordVo"/>
+        <include refid="adminWhere"/>
+        order by r.id desc
+    </select>
+
     <select id="getCommissionSummary" resultType="org.dromara.commission.domain.vo.CommissionSummaryVo">
         SELECT
         IFNULL(SUM(

@@ -30,6 +30,18 @@ public class BizCommissionRecordVo implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 租户编号
+     */
+    @ExcelProperty(value = "租户号")
+    private String tenantId;
+
+    /**
+     * 租户名称
+     */
+    @ExcelProperty(value = "租户名称")
+    private String tenantName;
+
+    /**
      * 主键ID
      */
     //@ExcelProperty(value = "主键ID")

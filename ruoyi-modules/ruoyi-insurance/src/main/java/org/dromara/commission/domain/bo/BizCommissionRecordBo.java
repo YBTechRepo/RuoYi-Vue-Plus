@@ -22,6 +22,16 @@ import java.math.BigDecimal;
 public class BizCommissionRecordBo extends BaseEntity {
 
     /**
+     * 租户编号
+     */
+    private String tenantId;
+
+    /**
+     * 租户名称
+     */
+    private String tenantName;
+
+    /**
      * 主键ID
      */
     @NotNull(message = "主键ID不能为空", groups = { EditGroup.class })
