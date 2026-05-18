@@ -1,6 +1,9 @@
 package org.dromara.insurance.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.dromara.commission.domain.BizCommissionRecord;
+import org.dromara.commission.mapper.BizCommissionRecordMapper;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -23,13 +26,16 @@ import org.dromara.insurance.mapper.InsuranceOrderInsuredMapper;
 import org.dromara.insurance.service.IInsuranceProxyOrderService;
 import org.dromara.system.domain.vo.SysTenantVo;
 import org.dromara.system.service.ISysTenantService;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
+import java.util.Set;
 
 /**
  * 代投保订单查询Service业务层处理 (Admin全局视图)
@@ -45,6 +51,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
     private final InsuranceApplyRecordMapper baseMapper;
     private final InsuranceOrderApplicantMapper applicantMapper;
     private final InsuranceOrderInsuredMapper insuredMapper;
+    private final BizCommissionRecordMapper commissionRecordMapper;
     private final ISysTenantService sysTenantService;
 
     /**
@@ -218,6 +225,80 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
             }
 
             return result;
+        });
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean changeStatus(InsuranceApplyRecordBo bo) {
+        if (bo == null || bo.getId() == null || StringUtils.isBlank(bo.getOrderNo())) {
+            throw new ServiceException("参数错误，无法取消订单");
+        }
+        if (!Integer.valueOf(4).equals(bo.getStatus())) {
+            throw new ServiceException("代投保订单仅允许变更为已取消");
+        }
+
+        return TenantHelper.ignore(() -> {
+            InsuranceApplyRecord order = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                .eq(InsuranceApplyRecord::getId, bo.getId())
+                .eq(InsuranceApplyRecord::getOrderNo, bo.getOrderNo())
+                .eq(InsuranceApplyRecord::getInsureMode, 1));
+            if (order == null) {
+                throw new ServiceException("订单不存在");
+            }
+
+            List<InsuranceApplyRecord> targetOrders = new ArrayList<>();
+            targetOrders.add(order);
+            if (Integer.valueOf(1).equals(order.getIsBatch())) {
+                List<InsuranceApplyRecord> subOrders = baseMapper.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                    .eq(InsuranceApplyRecord::getBatchOrderNo, order.getOrderNo())
+                    .eq(InsuranceApplyRecord::getIsBatch, 2)
+                    .eq(InsuranceApplyRecord::getInsureMode, 1));
+                targetOrders.addAll(subOrders);
+            }
+
+            List<String> orderNos = new ArrayList<>();
+            Set<Long> applyRecordIds = new HashSet<>();
+            for (InsuranceApplyRecord targetOrder : targetOrders) {
+                if (targetOrder != null && StringUtils.isNotBlank(targetOrder.getOrderNo())) {
+                    orderNos.add(targetOrder.getOrderNo());
+                }
+                if (targetOrder != null && targetOrder.getId() != null) {
+                    applyRecordIds.add(targetOrder.getId());
+                }
+            }
+
+            int applyRows = baseMapper.update(null, new LambdaUpdateWrapper<InsuranceApplyRecord>()
+                .in(InsuranceApplyRecord::getOrderNo, orderNos)
+                .eq(InsuranceApplyRecord::getInsureMode, 1)
+                .set(InsuranceApplyRecord::getStatus, 4)
+                .set(InsuranceApplyRecord::getDelFlag, "2"));
+            if (applyRows <= 0) {
+                throw new ServiceException("取消订单失败");
+            }
+
+            Set<Long> policyIds = new HashSet<>(applyRecordIds);
+            Set<String> policyNos = new HashSet<>(orderNos);
+            if (policyIds.isEmpty() && policyNos.isEmpty()) {
+                return true;
+            }
+
+            LambdaUpdateWrapper<BizCommissionRecord> commissionUpdate = new LambdaUpdateWrapper<BizCommissionRecord>()
+                .set(BizCommissionRecord::getStatus, 1)
+                .set(BizCommissionRecord::getDelFlag, "2");
+            commissionUpdate.and(wrapper -> {
+                if (!policyIds.isEmpty()) {
+                    wrapper.in(BizCommissionRecord::getPolicyId, policyIds);
+                }
+                if (!policyIds.isEmpty() && !policyNos.isEmpty()) {
+                    wrapper.or();
+                }
+                if (!policyNos.isEmpty()) {
+                    wrapper.in(BizCommissionRecord::getPolicyNo, policyNos);
+                }
+            });
+            commissionRecordMapper.update(null, commissionUpdate);
+            return true;
         });
     }
 

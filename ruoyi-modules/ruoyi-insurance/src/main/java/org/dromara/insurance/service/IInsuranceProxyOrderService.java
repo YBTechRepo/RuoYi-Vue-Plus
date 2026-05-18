@@ -67,6 +67,14 @@ public interface IInsuranceProxyOrderService {
     Map<String, Object> queryPersonDetail(String orderNo);
 
     /**
+     * 管理员取消代投保订单，并软删除关联佣金计算数据
+     *
+     * @param bo 代投保订单状态
+     * @return 是否修改成功
+     */
+    Boolean changeStatus(InsuranceApplyRecordBo bo);
+
+    /**
      * 新增代投保订单查询
      *
      * @param bo 代投保订单查询

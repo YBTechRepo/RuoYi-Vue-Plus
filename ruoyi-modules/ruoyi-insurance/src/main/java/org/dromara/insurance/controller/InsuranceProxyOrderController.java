@@ -116,6 +116,18 @@ public class InsuranceProxyOrderController extends BaseController {
     }
 
     /**
+     * 管理员取消代投保订单
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:insuranceProxyOrder:edit")
+    @Log(title = "代投保订单取消", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PostMapping("/changeStatus")
+    public R<Void> changeStatus(@RequestBody InsuranceApplyRecordBo bo) {
+        return toAjax(insuranceProxyOrderService.changeStatus(bo));
+    }
+
+    /**
      * 删除代投保订单查询
      *
      * @param ids 主键串
