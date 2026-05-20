@@ -132,4 +132,19 @@ public interface IInsuranceProductConfigService {
      * @return 同步统计
      */
     Map<String, Object> syncAllServiceFeeCommission();
+
+    /**
+     * 将平台产品同步到各租户产品库
+     *
+     * @param productIds 产品ID集合
+     * @return 同步统计
+     */
+    Map<String, Object> syncTenantProducts(Collection<Long> productIds);
+
+    /**
+     * 将全部平台产品同步到各租户产品库
+     *
+     * @return 同步统计
+     */
+    Map<String, Object> syncAllTenantProducts();
 }

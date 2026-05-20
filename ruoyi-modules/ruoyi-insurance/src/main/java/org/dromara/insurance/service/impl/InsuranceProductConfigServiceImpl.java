@@ -912,6 +912,115 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         return syncServiceFeeCommission(productIds);
     }
 
+    @Override
+    public Map<String, Object> syncTenantProducts(Collection<Long> productIds) {
+        if (CollUtil.isEmpty(productIds)) {
+            throw new ServiceException("请选择需要同步的产品");
+        }
+
+        List<Long> distinctProductIds = productIds.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (CollUtil.isEmpty(distinctProductIds)) {
+            throw new ServiceException("请选择需要同步的产品");
+        }
+
+        List<InsuranceProductConfig> products = TenantHelper.dynamic("000000", () -> baseMapper.selectBatchIds(distinctProductIds));
+        Map<Long, InsuranceProductConfig> productMap = products.stream()
+            .collect(Collectors.toMap(InsuranceProductConfig::getId, p -> p, (a, b) -> a));
+
+        Set<String> enabledTenantIds = TenantHelper.ignore(() -> sysTenantMapper.selectList(
+                Wrappers.<SysTenant>lambdaQuery()
+                    .select(SysTenant::getTenantId)
+                    .eq(SysTenant::getStatus, "0")
+            )).stream()
+            .map(SysTenant::getTenantId)
+            .filter(StringUtils::isNotBlank)
+            .filter(tenantId -> !"000000".equals(tenantId))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        int successCount = 0;
+        int skippedCount = 0;
+        int failCount = 0;
+        Set<String> affectedTenantIds = new HashSet<>();
+
+        if (CollUtil.isEmpty(enabledTenantIds)) {
+            skippedCount = distinctProductIds.size();
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("productCount", distinctProductIds.size());
+            result.put("tenantCount", 0);
+            result.put("successCount", successCount);
+            result.put("skippedCount", skippedCount);
+            result.put("failCount", failCount);
+            return result;
+        }
+
+        for (Long productId : distinctProductIds) {
+            InsuranceProductConfig product = productMap.get(productId);
+            if (product == null) {
+                skippedCount++;
+                continue;
+            }
+
+            for (String tenantId : enabledTenantIds) {
+                try {
+                    TenantHelper.dynamic(tenantId, () -> {
+                        InsuranceTenantProduct existing = insuranceTenantProductMapper.selectOne(
+                            Wrappers.<InsuranceTenantProduct>lambdaQuery()
+                                .eq(InsuranceTenantProduct::getProductId, product.getId())
+                                .last("limit 1")
+                        );
+
+                        if (existing == null) {
+                            InsuranceTenantProduct add = new InsuranceTenantProduct();
+                            add.setProductId(product.getId());
+                            add.setStatus("0");
+                            add.setCategoryId(product.getCategoryId());
+                            add.setCategoryName(product.getCategoryName());
+                            add.setMarketingTags(product.getMarketingTags());
+                            insuranceTenantProductMapper.insert(add);
+                        } else {
+                            insuranceTenantProductMapper.update(null,
+                                Wrappers.<InsuranceTenantProduct>lambdaUpdate()
+                                    .eq(InsuranceTenantProduct::getId, existing.getId())
+                                    .set(InsuranceTenantProduct::getCategoryId, product.getCategoryId())
+                                    .set(InsuranceTenantProduct::getCategoryName, product.getCategoryName())
+                                    .set(InsuranceTenantProduct::getMarketingTags, product.getMarketingTags())
+                            );
+                        }
+                        return null;
+                    });
+                    successCount++;
+                    affectedTenantIds.add(tenantId);
+                } catch (Exception e) {
+                    log.warn("同步租户产品失败，tenantId={}, productId={}", tenantId, productId, e);
+                    failCount++;
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("productCount", distinctProductIds.size());
+        result.put("tenantCount", affectedTenantIds.size());
+        result.put("successCount", successCount);
+        result.put("skippedCount", skippedCount);
+        result.put("failCount", failCount);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> syncAllTenantProducts() {
+        List<Long> productIds = TenantHelper.dynamic("000000", () -> baseMapper.selectObjs(
+                Wrappers.<InsuranceProductConfig>lambdaQuery()
+                    .select(InsuranceProductConfig::getId)
+            ).stream()
+            .filter(Objects::nonNull)
+            .map(item -> (Long) item)
+            .toList());
+        return syncTenantProducts(productIds);
+    }
+
     private List<ProductCommissionConfig> buildCommissionConfigs(String serviceFeeConfig) {
         if (StringUtils.isBlank(serviceFeeConfig)) {
             return Collections.emptyList();

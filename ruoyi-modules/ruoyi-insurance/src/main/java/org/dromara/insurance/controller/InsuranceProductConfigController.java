@@ -178,4 +178,27 @@ public class InsuranceProductConfigController extends BaseController {
     public R<Map<String, Object>> syncAllServiceFeeCommission() {
         return R.ok(insuranceProductConfigService.syncAllServiceFeeCommission());
     }
+
+    /**
+     * 将平台产品同步到各租户产品库
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:InsuranceProductConfig:syncProduct")
+    @Log(title = "产品配置同步产品", businessType = BusinessType.UPDATE)
+    @PostMapping("/syncTenantProducts")
+    public R<Map<String, Object>> syncTenantProducts(@RequestBody Map<String, List<Long>> body) {
+        List<Long> productIds = body == null ? null : body.get("productIds");
+        return R.ok(insuranceProductConfigService.syncTenantProducts(productIds));
+    }
+
+    /**
+     * 将全部平台产品同步到各租户产品库
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:InsuranceProductConfig:syncProduct")
+    @Log(title = "产品配置同步全部产品", businessType = BusinessType.UPDATE)
+    @PostMapping("/syncAllTenantProducts")
+    public R<Map<String, Object>> syncAllTenantProducts() {
+        return R.ok(insuranceProductConfigService.syncAllTenantProducts());
+    }
 }

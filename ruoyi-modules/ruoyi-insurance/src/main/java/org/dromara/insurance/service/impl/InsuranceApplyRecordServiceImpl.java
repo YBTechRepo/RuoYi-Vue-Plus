@@ -4,6 +4,7 @@ import org.dromara.common.tenant.helper.TenantHelper;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.collection.CollUtil;
+import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.BizCommissionProduct;
@@ -61,6 +62,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URL;
 import java.util.*;
 
 
@@ -286,8 +288,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
-            builder.withHtmlContent(html, null);
             registerChineseFont(builder);
+            builder.withHtmlContent(html, null);
             builder.toStream(outputStream);
             builder.run();
             return new VoucherPdfResult(fileName, outputStream.toByteArray());
@@ -482,8 +484,12 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     }
 
     private void registerChineseFont(PdfRendererBuilder builder) {
-        List<String> fontPaths = Arrays.asList(
-            "src/main/resources/fonts/NotoSansSC-Regular.otf",
+        List<String> trueTypeFontPaths = Arrays.asList(
+            "/home/ry-app/backend/fonts/NotoSansSC-Regular.ttf",
+            "/home/ry-app/backend/fonts/SourceHanSansSC-Regular.ttf",
+            "/home/ry-app/backend/fonts/simsun.ttf",
+            "/home/ry-app/backend/fonts/simhei.ttf",
+            "/home/ry-app/backend/fonts/msyh.ttf",
             "C:/Windows/Fonts/msyh.ttc",
             "C:/Windows/Fonts/simsun.ttc",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -491,14 +497,27 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         );
-        for (String fontPath : fontPaths) {
+        for (String fontPath : trueTypeFontPaths) {
             File fontFile = new File(fontPath);
             if (fontFile.exists() && fontFile.isFile()) {
-                builder.useFont(fontFile, "VoucherFont");
+                builder.useFont(fontFile, "VoucherFont", 400, BaseRendererBuilder.FontStyle.NORMAL, true);
+                builder.useFont(fontFile, "VoucherFont", 700, BaseRendererBuilder.FontStyle.NORMAL, true);
+                log.info("投保凭证 PDF 使用字体文件: {}", fontFile.getAbsolutePath());
                 return;
             }
         }
-        log.warn("未找到可用中文字体，投保凭证 PDF 可能出现中文显示异常");
+
+        URL classpathFontUrl = InsuranceApplyRecordServiceImpl.class.getResource("/fonts/NotoSansSC-Regular.ttf");
+        if (classpathFontUrl != null) {
+            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
+                "VoucherFont", 400, BaseRendererBuilder.FontStyle.NORMAL, true);
+            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
+                "VoucherFont", 700, BaseRendererBuilder.FontStyle.NORMAL, true);
+            log.info("投保凭证 PDF 使用 classpath 字体: /fonts/NotoSansSC-Regular.ttf");
+            return;
+        }
+
+        log.warn("未找到可用 TrueType 中文字体，投保凭证 PDF 可能出现中文显示异常。请在 /home/ry-app/backend/fonts 放置 NotoSansSC-Regular.ttf 或 SourceHanSansSC-Regular.ttf");
     }
 
     private LambdaQueryWrapper<InsuranceApplyRecord> buildQueryWrapper(InsuranceApplyRecordBo bo) {
