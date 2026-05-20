@@ -1,5 +1,8 @@
 package org.dromara.insurance.controller;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
@@ -14,7 +17,7 @@ import org.dromara.common.core.constant.TenantConstants;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
 import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
-import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.dto.VoucherPdfResult;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -84,6 +87,22 @@ public class InsuranceApplyRecordController extends BaseController {
     }
 
     /**
+     * 生成投保凭证 PDF
+     */
+    @SaCheckPermission("insurance:InsuranceApplyRecord:query")
+    @GetMapping("/voucherPdf/{orderNo}")
+    public void voucherPdf(@NotBlank(message = "订单号不能为空") @PathVariable String orderNo,
+                           HttpServletResponse response) throws IOException {
+        VoucherPdfResult result = insuranceApplyRecordService.generateVoucherPdf(orderNo);
+        String encodedFileName = URLEncoder.encode(result.getFileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        response.setContentType("application/pdf");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName);
+        response.setContentLength(result.getContent().length);
+        response.getOutputStream().write(result.getContent());
+    }
+
+    /**
      * 导出投保记录列表
      */
     @SaCheckPermission("insurance:InsuranceApplyRecord:export")
@@ -133,7 +152,7 @@ public class InsuranceApplyRecordController extends BaseController {
      *
      * @param ids 主键串
      */
-    @SaCheckPermission("insurance:InsuranceApplyRecord:remove")
+    @SaCheckLogin
     @Log(title = "投保记录", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ids}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")

@@ -2,7 +2,9 @@ package org.dromara.insurance.service.impl;
 
 import org.dromara.common.tenant.helper.TenantHelper;
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.collection.CollUtil;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.BizCommissionProduct;
 import org.dromara.commission.event.PolicyUnderwrittenEvent;
@@ -26,6 +28,8 @@ import org.dromara.commission.service.IBizCommissionRecordService;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.finance.service.IBizUserAccountService;
 import org.dromara.insurance.domain.*;
+import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
+import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.bo.ProductCommissionConfig;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.dromara.insurance.domain.dto.BatchInsuredImportDto;
@@ -33,14 +37,17 @@ import org.dromara.insurance.domain.dto.BatchSubmitDTO;
 import org.dromara.insurance.domain.dto.OrderInsuredItemDTO;
 import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
 import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.dto.VoucherPdfResult;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.mapper.*;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
 import org.dromara.system.domain.vo.SysDeptVo;
+import org.dromara.system.domain.vo.SysDictDataVo;
 import org.dromara.system.domain.vo.SysRoleVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.service.ISysDeptService;
+import org.dromara.system.service.ISysDictTypeService;
 import org.dromara.system.service.ISysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -50,6 +57,8 @@ import org.dromara.insurance.service.IInsuranceApplyRecordService;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationContext;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -83,6 +92,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     private final ISysUserService sysUserService;
 
     private final ISysDeptService sysDeptService;
+
+    private final ISysDictTypeService sysDictTypeService;
 
     private final ApplicationContext applicationContext;
 
@@ -147,6 +158,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(InsuranceApplyRecord::getId);
+        lqw.eq(InsuranceApplyRecord::getDelFlag, "0");
         lqw.eq(InsuranceApplyRecord::getIsBatch, 2);
         lqw.eq(InsuranceApplyRecord::getBatchOrderNo, orderNo);
         Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
@@ -163,12 +175,22 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         TenantHelper.ignore(() -> {
             List<InsuranceApplyRecord> subOrders = baseMapper.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
                 .eq(InsuranceApplyRecord::getBatchOrderNo, batchOrderNo)
+                .eq(InsuranceApplyRecord::getDelFlag, "0")
                 .eq(InsuranceApplyRecord::getIsBatch, 2)
                 .orderByAsc(InsuranceApplyRecord::getId));
 
             for (InsuranceApplyRecord subOrder : subOrders) {
                 Map<String, Object> map = new HashMap<>();
                 map.put("orderNo", subOrder.getOrderNo());
+                map.put("productId", subOrder.getProductId());
+                map.put("productCode", subOrder.getProductCode());
+                map.put("productName", subOrder.getProductName());
+                map.put("agentName", subOrder.getAgentName());
+                map.put("customerName", subOrder.getCustomerName());
+                map.put("customerMobile", subOrder.getCustomerMobile());
+                map.put("createTime", subOrder.getCreateTime());
+                map.put("insureMode", subOrder.getInsureMode());
+                map.put("isBatch", subOrder.getIsBatch());
                 map.put("status", subOrder.getStatus());
 
                 InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
@@ -221,10 +243,269 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         return result;
     }
 
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
+    public VoucherPdfResult generateVoucherPdf(String orderNo) {
+        if (StringUtils.isBlank(orderNo)) {
+            throw new ServiceException("订单号不能为空");
+        }
+
+        InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
+            .eq(InsuranceApplyRecord::getOrderNo, orderNo));
+        if (record == null) {
+            throw new ServiceException("订单不存在");
+        }
+        if (Objects.equals(record.getIsBatch(), 1)) {
+            throw new ServiceException("批量主单请针对子单生成投保凭证");
+        }
+
+        InsuranceOrderApplicant applicant = null;
+        InsuranceOrderInsured insured = null;
+        if (Objects.equals(record.getInsureMode(), 1)) {
+            applicant = TenantHelper.ignore(() -> insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+                .eq(InsuranceOrderApplicant::getOrderNo, orderNo)));
+            insured = TenantHelper.ignore(() -> insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+                .eq(InsuranceOrderInsured::getOrderNo, orderNo)));
+        }
+
+        InsuranceProductSaveBo productData = null;
+        if (record.getProductId() != null) {
+            try {
+                productData = productConfigService.getProductFull(record.getProductId());
+            } catch (Exception e) {
+                log.warn("订单 {} 查询产品完整配置失败，PDF 将使用空产品配置", orderNo, e);
+            }
+        }
+
+        String html = buildVoucherHtml(record, applicant, insured, productData);
+        String fileName = sanitizeFileName(display(record.getProductName(), "投保凭证") + "-投保凭证_" + record.getOrderNo() + ".pdf");
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(html, null);
+            registerChineseFont(builder);
+            builder.toStream(outputStream);
+            builder.run();
+            return new VoucherPdfResult(fileName, outputStream.toByteArray());
+        } catch (Exception e) {
+            log.error("订单 {} 生成投保凭证 PDF 失败", orderNo, e);
+            throw new ServiceException("生成PDF失败");
+        }
+    }
+
+    private String buildVoucherHtml(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured, InsuranceProductSaveBo productData) {
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\" />")
+            .append("<style>")
+            .append("@page{size:A4;margin:30mm 20mm 25mm;}")
+            .append("body{font-family:'VoucherFont','Microsoft YaHei','SimSun',sans-serif;color:#333;font-size:13px;line-height:1.6;}")
+            .append("h1{font-size:24px;text-align:center;margin:0 0 24px;font-weight:bold;}")
+            .append(".notice{padding:10px 12px;margin-bottom:18px;color:#666;font-size:12px;line-height:1.8;border:1px solid #ddd;}")
+            .append(".section-title{padding-left:8px;margin:20px 0 10px;font-size:16px;font-weight:bold;line-height:1.25;border-left:4px solid #333;}")
+            .append("table{width:100%;margin-bottom:12px;border-collapse:collapse;table-layout:fixed;}")
+            .append("td{padding:8px;line-height:1.6;vertical-align:top;word-break:break-all;border:1px solid #999;}")
+            .append(".label{width:20%;font-weight:bold;background:#f5f5f5;}.value{width:30%;}.empty{padding:10px 8px;margin-bottom:12px;color:#666;border:1px solid #ddd;}")
+            .append(".link-list{padding:8px 0;margin-bottom:12px;}.link-list a{display:block;margin-bottom:8px;color:#1d4ed8;text-decoration:none;}")
+            .append(".important-note{padding:10px 12px;color:#444;border:1px solid #ddd;}.important-note p{margin:0 0 8px;}.important-note p:last-child{margin-bottom:0;}")
+            .append("</style></head><body>");
+
+        html.append("<h1>").append(escapeHtml(display(record.getProductName(), "--"))).append("-投保凭证</h1>");
+        html.append("<div class=\"notice\">本凭证用于证明用户已完成投保信息提交及订单生成。具体承保结果、保障责任、免责条款及理赔要求，最终以保险公司出具的正式保单、保险条款及保险公司审核结果为准。</div>");
+
+        appendOrderInfo(html, record);
+        appendInsureNotice(html, productData);
+        if (Objects.equals(record.getInsureMode(), 1)) {
+            appendApplicantInfo(html, record, applicant);
+            appendInsuredInfo(html, insured);
+        }
+        appendLiabilityInfo(html, productData);
+        appendClauseInfo(html, productData);
+        appendClaimInfo(html, productData);
+        appendImportantNote(html);
+
+        html.append("</body></html>");
+        return html.toString();
+    }
+
+    private void appendOrderInfo(StringBuilder html, InsuranceApplyRecord record) {
+        html.append("<div class=\"section-title\">订单信息</div><table><tbody>")
+            .append(row("订单号", record.getOrderNo(), "下单时间", formatDate(record.getCreateTime())))
+            .append(row("登记客户", record.getCustomerName(), "客户手机号", record.getCustomerMobile()))
+            .append("<tr><td class=\"label\">业务员姓名</td><td class=\"value\" colspan=\"3\">").append(escapeHtml(display(record.getAgentName(), "--"))).append("</td></tr>")
+            .append("</tbody></table>");
+    }
+
+    private void appendInsureNotice(StringBuilder html, InsuranceProductSaveBo productData) {
+        html.append("<div class=\"section-title\">投保须知</div>");
+        List<InsuranceProductDetail.NoticeItem> noticeList = productData == null ? Collections.emptyList() : productData.getInsureNotice();
+        if (CollUtil.isEmpty(noticeList)) {
+            appendEmpty(html, "暂无投保须知");
+            return;
+        }
+        html.append("<table><tbody>");
+        noticeList.stream().sorted(Comparator.comparing(item -> Optional.ofNullable(item.getSort()).orElse(0))).forEach(item ->
+            html.append("<tr><td class=\"label\">").append(escapeHtml(display(item.getTitle(), "--"))).append("</td><td class=\"value\" colspan=\"3\">")
+                .append(escapeHtml(display(item.getContent(), "--"))).append("</td></tr>")
+        );
+        html.append("</tbody></table>");
+    }
+
+    private void appendApplicantInfo(StringBuilder html, InsuranceApplyRecord record, InsuranceOrderApplicant applicant) {
+        html.append("<div class=\"section-title\">投保人信息</div><table><tbody>")
+            .append(row("投保人姓名", applicant == null ? null : applicant.getApplicantName(), "证件号码", applicant == null ? null : applicant.getApplicantCertNo()))
+            .append(row("联系电话", applicant == null ? null : applicant.getApplicantPhone(), "投保时间", formatDate(record.getCreateTime())))
+            .append(row("证件类型", applicant == null ? null : translateDict("insurance_id_type", applicant.getApplicantCertType()), "联系地址", applicant == null ? null : applicant.getApplicantAddress()))
+            .append("</tbody></table>");
+    }
+
+    private void appendInsuredInfo(StringBuilder html, InsuranceOrderInsured insured) {
+        html.append("<div class=\"section-title\">被保人信息</div><table><tbody>")
+            .append(row("被保人姓名", insured == null ? null : insured.getInsuredName(), "证件号码", insured == null ? null : insured.getInsuredCertNo()))
+            .append(row("与投保人关系", insured == null ? null : translateDict("insurance_relationship_to_insured", insured.getRelation()), "证件类型", insured == null ? null : translateDict("insurance_id_type", insured.getInsuredCertType())))
+            .append(row("联系电话", insured == null ? null : insured.getInsuredPhone(), "联系地址", insured == null ? null : insured.getInsuredAddress()))
+            .append("</tbody></table>");
+    }
+
+    private void appendLiabilityInfo(StringBuilder html, InsuranceProductSaveBo productData) {
+        html.append("<div class=\"section-title\">保障信息</div>");
+        List<InsuranceProductLiabilityBo> liabilityList = productData == null ? Collections.emptyList() : productData.getLiabilityList();
+        if (CollUtil.isEmpty(liabilityList)) {
+            appendEmpty(html, "暂无保障责任");
+            return;
+        }
+        html.append("<table><tbody>");
+        liabilityList.stream().sorted(Comparator.comparing(item -> Optional.ofNullable(item.getSort()).orElse(0L))).forEach(item ->
+            html.append(row("责任名称", item.getLiabilityName(), "保额", item.getInsuredAmountDesc()))
+        );
+        liabilityList.stream().sorted(Comparator.comparing(item -> Optional.ofNullable(item.getSort()).orElse(0L))).forEach(item ->
+            html.append("<tr><td class=\"label\">").append(escapeHtml(display(item.getLiabilityName(), "--"))).append("-责任说明</td><td class=\"value\" colspan=\"3\">")
+                .append(escapeHtml(display(item.getDescription(), "--"))).append("</td></tr>")
+        );
+        html.append("</tbody></table>");
+    }
+
+    private void appendClauseInfo(StringBuilder html, InsuranceProductSaveBo productData) {
+        html.append("<div class=\"section-title\">保险条款</div>");
+        List<InsuranceProductDetail.ClauseItem> clauseList = productData == null ? Collections.emptyList() : productData.getClauseFiles();
+        if (CollUtil.isEmpty(clauseList)) {
+            appendEmpty(html, "暂无条款规则");
+            return;
+        }
+        html.append("<div class=\"link-list\">");
+        clauseList.stream().sorted(Comparator.comparing(item -> Optional.ofNullable(item.getSort()).orElse(0))).forEach(item ->
+            html.append("<a href=\"").append(escapeHtml(display(item.getFileUrl(), "#"))).append("\">《")
+                .append(escapeHtml(display(item.getClauseName(), "--"))).append("》</a>")
+        );
+        html.append("</div>");
+    }
+
+    private void appendClaimInfo(StringBuilder html, InsuranceProductSaveBo productData) {
+        html.append("<div class=\"section-title\">理赔说明</div>");
+        List<InsuranceProductDetail.StepItem> claimList = productData == null ? Collections.emptyList() : productData.getClaimInstructions();
+        if (CollUtil.isEmpty(claimList)) {
+            appendEmpty(html, "暂无理赔说明");
+            return;
+        }
+        html.append("<table><tbody>");
+        claimList.stream().sorted(Comparator.comparing(item -> Optional.ofNullable(item.getSort()).orElse(0))).forEach(item ->
+            html.append("<tr><td class=\"label\">").append(escapeHtml(display(item.getTitle(), "--"))).append("</td><td class=\"value\" colspan=\"3\">")
+                .append(escapeHtml(display(item.getContent(), "--"))).append("</td></tr>")
+        );
+        html.append("</tbody></table>");
+    }
+
+    private void appendImportantNote(StringBuilder html) {
+        html.append("<div class=\"section-title\">重要说明</div>")
+            .append("<div class=\"important-note\">")
+            .append("<p>1. 本凭证不等同于正式保险合同，正式保障内容以保险公司出具的电子保单及保险条款为准。</p>")
+            .append("<p>2. 若订单处于待承保、待审核或待生效状态，保险责任是否成立以保险公司最终审核结果为准。</p>")
+            .append("<p>3. 如发生退保、撤单、承保失败、信息变更等情况，请以系统最新订单状态及保险公司通知为准。</p>")
+            .append("<p>4. 理赔申请需按保险公司要求提交真实、完整、有效的理赔材料。</p>")
+            .append("</div>");
+    }
+
+    private String row(String label1, Object value1, String label2, Object value2) {
+        return "<tr><td class=\"label\">" + escapeHtml(label1) + "</td><td class=\"value\">" + escapeHtml(display(value1, "--"))
+            + "</td><td class=\"label\">" + escapeHtml(label2) + "</td><td class=\"value\">" + escapeHtml(display(value2, "--")) + "</td></tr>";
+    }
+
+    private void appendEmpty(StringBuilder html, String text) {
+        html.append("<div class=\"empty\">").append(escapeHtml(text)).append("</div>");
+    }
+
+    private String formatDate(Date date) {
+        return date == null ? "--" : DateUtil.format(date, "yyyy-MM-dd HH:mm:ss");
+    }
+
+    private String display(Object value, String defaultValue) {
+        return value == null || StringUtils.isBlank(String.valueOf(value)) ? defaultValue : String.valueOf(value);
+    }
+
+    private String translateDict(String dictType, Object dictValue) {
+        if (StringUtils.isBlank(dictType) || dictValue == null || StringUtils.isBlank(String.valueOf(dictValue))) {
+            return display(dictValue, "--");
+        }
+        try {
+            List<SysDictDataVo> dictDataList = sysDictTypeService.selectDictDataByType(dictType);
+            if (CollUtil.isNotEmpty(dictDataList)) {
+                String value = String.valueOf(dictValue);
+                return dictDataList.stream()
+                    .filter(item -> StringUtils.equals(item.getDictValue(), value))
+                    .map(SysDictDataVo::getDictLabel)
+                    .findFirst()
+                    .orElse(value);
+            }
+        } catch (Exception e) {
+            log.warn("字典 {} 的值 {} 翻译失败，将使用原始值", dictType, dictValue, e);
+        }
+        return String.valueOf(dictValue);
+    }
+
+    private String escapeHtml(Object value) {
+        if (value == null) {
+            return "";
+        }
+        return String.valueOf(value)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;");
+    }
+
+    private String sanitizeFileName(String fileName) {
+        return fileName.replaceAll("[\\\\/:*?\"<>|]", "");
+    }
+
+    private void registerChineseFont(PdfRendererBuilder builder) {
+        List<String> fontPaths = Arrays.asList(
+            "src/main/resources/fonts/NotoSansSC-Regular.otf",
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simsun.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        );
+        for (String fontPath : fontPaths) {
+            File fontFile = new File(fontPath);
+            if (fontFile.exists() && fontFile.isFile()) {
+                builder.useFont(fontFile, "VoucherFont");
+                return;
+            }
+        }
+        log.warn("未找到可用中文字体，投保凭证 PDF 可能出现中文显示异常");
+    }
+
     private LambdaQueryWrapper<InsuranceApplyRecord> buildQueryWrapper(InsuranceApplyRecordBo bo) {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = Wrappers.lambdaQuery();
         lqw.orderByDesc(InsuranceApplyRecord::getId);
+        lqw.eq(InsuranceApplyRecord::getDelFlag, "0");
         lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), InsuranceApplyRecord::getOrderNo, bo.getOrderNo());
         lqw.eq(StringUtils.isNotBlank(bo.getProductCode()), InsuranceApplyRecord::getProductCode, bo.getProductCode());
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), InsuranceApplyRecord::getProductName, bo.getProductName());
@@ -255,7 +536,6 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         if(Objects.equals(bo.getInsureMode(), 1) && Objects.equals(bo.getPaymentMode(), 1)){
             add.setStatus(2);
         }
-
         validEntityBeforeSave(add);
         boolean flag = baseMapper.insert(add) > 0;
         if (flag) {
@@ -292,11 +572,44 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 是否删除成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
-        if(isValid){
-            //TODO 做一些业务上的校验,判断是否需要校验
+        if (!Boolean.TRUE.equals(isValid)) {
+            return baseMapper.deleteByIds(ids) > 0;
         }
-        return baseMapper.deleteByIds(ids) > 0;
+
+        List<InsuranceApplyRecord> records = baseMapper.selectBatchIds(ids);
+        if (records.size() != ids.size()) {
+            throw new ServiceException("订单不存在或已删除");
+        }
+
+        Long currentUserId = LoginHelper.getUserId();
+        Set<Long> deleteIds = new LinkedHashSet<>();
+        for (InsuranceApplyRecord record : records) {
+            validateOrderBeforeDelete(record, currentUserId);
+            deleteIds.add(record.getId());
+
+            if (Objects.equals(record.getIsBatch(), 1)) {
+                List<InsuranceApplyRecord> subOrders = baseMapper.selectList(Wrappers.<InsuranceApplyRecord>lambdaQuery()
+                    .eq(InsuranceApplyRecord::getBatchOrderNo, record.getOrderNo())
+                    .eq(InsuranceApplyRecord::getIsBatch, 2));
+                for (InsuranceApplyRecord subOrder : subOrders) {
+                    validateOrderBeforeDelete(subOrder, currentUserId);
+                    deleteIds.add(subOrder.getId());
+                }
+            }
+        }
+
+        return baseMapper.deleteByIds(deleteIds) > 0;
+    }
+
+    private void validateOrderBeforeDelete(InsuranceApplyRecord record, Long currentUserId) {
+        if (!Objects.equals(record.getCreateBy(), currentUserId)) {
+            throw new ServiceException("订单[" + record.getOrderNo() + "]只能由创建人删除");
+        }
+        if (Objects.equals(record.getStatus(), 0) || Objects.equals(record.getCommissionStatus(), 0)) {
+            throw new ServiceException("订单[" + record.getOrderNo() + "]当前状态不允许删除");
+        }
     }
 
     @Override
@@ -690,6 +1003,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
 
         CalcCommission calcParam = new CalcCommission();
+        calcParam.setBizSource(1);
         calcParam.setPolicyId(order.getId());
         calcParam.setPolicyNo(order.getOrderNo());
         calcParam.setProductId(order.getProductId());

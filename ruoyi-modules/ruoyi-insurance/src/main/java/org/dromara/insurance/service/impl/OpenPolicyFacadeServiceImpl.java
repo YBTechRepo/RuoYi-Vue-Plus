@@ -173,6 +173,7 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             }
 
             // ================= 4. 锁定数据底层归属权 =================
+            calcParam.setBizSource(2);
             calcParam.setPolicyNo(policyNo);
             calcParam.setProductId(product.getId());
             calcParam.setProductName(product.getProductName());

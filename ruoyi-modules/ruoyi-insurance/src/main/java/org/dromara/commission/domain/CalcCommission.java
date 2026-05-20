@@ -39,5 +39,10 @@ public class CalcCommission {
      */
     private Long payerUserId;
 
+    /**
+     * 业务来源：1-投保申请记录 2-保单记录
+     */
+    private Integer bizSource;
+
     //private Long projectDeptId;
 }

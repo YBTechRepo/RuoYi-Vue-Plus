@@ -3,6 +3,7 @@ package org.dromara.insurance.service;
 import org.dromara.insurance.domain.dto.BatchSubmitDTO;
 import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
 import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
+import org.dromara.insurance.domain.dto.VoucherPdfResult;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
@@ -61,6 +62,14 @@ public interface IInsuranceApplyRecordService {
      * @return 个人详情
      */
     Map<String, Object> queryPersonDetail(String orderNo);
+
+    /**
+     * 生成投保凭证 PDF
+     *
+     * @param orderNo 订单号
+     * @return PDF 文件名和内容
+     */
+    VoucherPdfResult generateVoucherPdf(String orderNo);
 
     /**
      * 查询批量投保的子单列表
