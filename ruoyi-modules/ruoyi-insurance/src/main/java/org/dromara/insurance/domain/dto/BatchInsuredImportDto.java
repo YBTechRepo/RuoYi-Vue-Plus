@@ -80,6 +80,8 @@ public class BatchInsuredImportDto {
     private Boolean isEditing = false; // 前端 UI 状态位（可选，由于前端自己写了默认值，这里可以不加）
     @ExcelIgnore
     private Map<String, String> errors = new HashMap<>(); // 存放具体的错误字段和错误信息集合
+    @ExcelIgnore
+    private Map<String, Object> extraData = new HashMap<>(); // 投保扩展字段值
 
     /**
      * FastExcel 自定义转换器：专门处理类似 "01 - 身份证" 这种带编号的数据

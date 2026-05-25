@@ -172,4 +172,9 @@ public class InsuranceApplyRecord extends TenantEntity {
      * 收货地址
      */
     private String receiverAddress;
+
+    /**
+     * 投保扩展字段值 (JSON对象)
+     */
+    private String insureExtraData;
 }

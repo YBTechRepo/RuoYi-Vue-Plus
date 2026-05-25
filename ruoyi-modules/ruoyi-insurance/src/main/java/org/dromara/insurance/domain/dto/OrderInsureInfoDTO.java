@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class OrderInsureInfoDTO {
@@ -61,4 +62,9 @@ public class OrderInsureInfoDTO {
      * 卡密订单：收货地址
      */
     private String receiverAddress;
+
+    /**
+     * 产品扩展投保字段值
+     */
+    private Map<String, Object> extraData;
 }

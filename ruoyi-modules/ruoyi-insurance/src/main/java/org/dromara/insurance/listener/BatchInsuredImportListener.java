@@ -8,8 +8,10 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.utils.ValidatorUtils;
 import org.dromara.insurance.domain.dto.BatchInsuredImportDto;
+import org.dromara.insurance.utils.DynamicInsureFieldUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -28,11 +30,22 @@ public class BatchInsuredImportListener extends AnalysisEventListener<BatchInsur
     @Getter
     private int invalidCount = 0;
 
+    private final List<DynamicInsureFieldUtils.Field> dynamicFields;
+
+    public BatchInsuredImportListener() {
+        this(Collections.emptyList());
+    }
+
+    public BatchInsuredImportListener(List<DynamicInsureFieldUtils.Field> dynamicFields) {
+        this.dynamicFields = dynamicFields == null ? Collections.emptyList() : dynamicFields;
+    }
+
     @Override
     public void invoke(BatchInsuredImportDto data, AnalysisContext context) {
         try {
             // 1. 触发 JSR303 强校验 (基于 @NotBlank, @Length, @Pattern 等)
             ValidatorUtils.validate(data);
+            validateDynamicFields(data);
 
             // 2. 如果顺利走通，则记录为成功数据
             data.setIsValid(true);
@@ -51,6 +64,12 @@ public class BatchInsuredImportListener extends AnalysisEventListener<BatchInsur
                 data.getErrors().put(errorField, errorMsg);
             }
             invalidCount++;
+        } catch (IllegalArgumentException e) {
+            data.setIsValid(false);
+            if (data.getErrors().isEmpty()) {
+                data.getErrors().put("extraData", e.getMessage());
+            }
+            invalidCount++;
         } catch (Exception e) {
             // 处理其他解析层面的未知异常
             data.setIsValid(false);
@@ -60,6 +79,16 @@ public class BatchInsuredImportListener extends AnalysisEventListener<BatchInsur
 
         // 统一添加到汇总集合
         resultList.add(data);
+    }
+
+    private void validateDynamicFields(BatchInsuredImportDto data) {
+        for (DynamicInsureFieldUtils.Field field : dynamicFields) {
+            String error = DynamicInsureFieldUtils.validateValue(field, data.getExtraData().get(field.getKey()));
+            if (org.dromara.common.core.utils.StringUtils.isNotBlank(error)) {
+                data.getErrors().put("extraData." + field.getKey(), error);
+                throw new IllegalArgumentException(error);
+            }
+        }
     }
 
     @Override

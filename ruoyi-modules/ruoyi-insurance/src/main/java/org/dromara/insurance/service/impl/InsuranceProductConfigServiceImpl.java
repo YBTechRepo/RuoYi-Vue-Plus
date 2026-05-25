@@ -1021,6 +1021,83 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         return syncTenantProducts(productIds);
     }
 
+    @Override
+    public Map<String, Object> syncAllTenantProductStatus() {
+        List<Long> disabledProductIds = TenantHelper.dynamic("000000", () -> baseMapper.selectObjs(
+                Wrappers.<InsuranceProductConfig>lambdaQuery()
+                    .select(InsuranceProductConfig::getId)
+                    .eq(InsuranceProductConfig::getStatus, 1)
+            ).stream()
+            .filter(Objects::nonNull)
+            .map(item -> (Long) item)
+            .toList());
+
+        int successCount = 0;
+        int skippedCount = 0;
+        int failCount = 0;
+        Set<String> affectedTenantIds = new HashSet<>();
+
+        if (CollUtil.isEmpty(disabledProductIds)) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("productCount", 0);
+            result.put("tenantCount", 0);
+            result.put("successCount", successCount);
+            result.put("skippedCount", skippedCount);
+            result.put("failCount", failCount);
+            return result;
+        }
+
+        Set<String> enabledTenantIds = TenantHelper.ignore(() -> sysTenantMapper.selectList(
+                Wrappers.<SysTenant>lambdaQuery()
+                    .select(SysTenant::getTenantId)
+                    .eq(SysTenant::getStatus, "0")
+            )).stream()
+            .map(SysTenant::getTenantId)
+            .filter(StringUtils::isNotBlank)
+            .filter(tenantId -> !"000000".equals(tenantId))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (CollUtil.isEmpty(enabledTenantIds)) {
+            skippedCount = disabledProductIds.size();
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("productCount", disabledProductIds.size());
+            result.put("tenantCount", 0);
+            result.put("successCount", successCount);
+            result.put("skippedCount", skippedCount);
+            result.put("failCount", failCount);
+            return result;
+        }
+
+        for (String tenantId : enabledTenantIds) {
+            try {
+                Integer updateCount = TenantHelper.dynamic(tenantId, () -> insuranceTenantProductMapper.update(null,
+                    Wrappers.<InsuranceTenantProduct>lambdaUpdate()
+                        .in(InsuranceTenantProduct::getProductId, disabledProductIds)
+                        .and(wrapper -> wrapper.ne(InsuranceTenantProduct::getStatus, "1").or().isNull(InsuranceTenantProduct::getStatus))
+                        .set(InsuranceTenantProduct::getStatus, "1")
+                ));
+
+                if (updateCount != null && updateCount > 0) {
+                    successCount += updateCount;
+                    affectedTenantIds.add(tenantId);
+                } else {
+                    skippedCount++;
+                }
+            } catch (Exception e) {
+                log.warn("同步租户产品状态失败，tenantId={}", tenantId, e);
+                failCount++;
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("productCount", disabledProductIds.size());
+        result.put("tenantCount", affectedTenantIds.size());
+        result.put("successCount", successCount);
+        result.put("skippedCount", skippedCount);
+        result.put("failCount", failCount);
+        return result;
+    }
+
     private List<ProductCommissionConfig> buildCommissionConfigs(String serviceFeeConfig) {
         if (StringUtils.isBlank(serviceFeeConfig)) {
             return Collections.emptyList();

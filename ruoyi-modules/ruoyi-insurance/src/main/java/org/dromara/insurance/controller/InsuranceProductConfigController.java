@@ -201,4 +201,15 @@ public class InsuranceProductConfigController extends BaseController {
     public R<Map<String, Object>> syncAllTenantProducts() {
         return R.ok(insuranceProductConfigService.syncAllTenantProducts());
     }
+
+    /**
+     * 将全部平台下架产品状态同步到各租户产品库
+     */
+    @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
+    @SaCheckPermission("insurance:InsuranceProductConfig:syncProduct")
+    @Log(title = "产品配置同步全部产品状态", businessType = BusinessType.UPDATE)
+    @PostMapping("/syncAllTenantProductStatus")
+    public R<Map<String, Object>> syncAllTenantProductStatus() {
+        return R.ok(insuranceProductConfigService.syncAllTenantProductStatus());
+    }
 }

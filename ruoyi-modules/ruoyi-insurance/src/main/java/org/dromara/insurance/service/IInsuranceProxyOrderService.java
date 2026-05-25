@@ -1,5 +1,6 @@
 package org.dromara.insurance.service;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -48,7 +49,7 @@ public interface IInsuranceProxyOrderService {
      * @param bo 查询条件
      * @return 导出用代投保订单列表
      */
-    List<InsuranceApplyRecordVo> exportList(InsuranceApplyRecordBo bo);
+    void exportList(InsuranceApplyRecordBo bo, HttpServletResponse response);
 
     /**
      * 查询批次子单列表

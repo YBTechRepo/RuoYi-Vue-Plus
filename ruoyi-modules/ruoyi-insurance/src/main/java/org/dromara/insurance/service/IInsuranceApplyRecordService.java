@@ -10,6 +10,7 @@ import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,14 @@ public interface IInsuranceApplyRecordService {
      * @return 投保记录列表
      */
     List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo);
+
+    /**
+     * 导出投保记录列表，单产品导出时追加投保扩展字段列。
+     *
+     * @param bo       查询条件
+     * @param response 响应体
+     */
+    void exportList(InsuranceApplyRecordBo bo, HttpServletResponse response);
 
     /**
      * 查询批次子单列表 (租户隔离)

@@ -225,6 +225,11 @@ public class InsuranceApplyRecordVo implements Serializable {
     private String receiverAddress;
 
     /**
+     * 投保扩展字段值 (JSON对象)
+     */
+    private String insureExtraData;
+
+    /**
      * 投保人姓名
      */
     @ExcelProperty(value = "投保人姓名")

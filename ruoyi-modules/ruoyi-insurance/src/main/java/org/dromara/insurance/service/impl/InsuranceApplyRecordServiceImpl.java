@@ -4,8 +4,12 @@ import org.dromara.common.tenant.helper.TenantHelper;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.idev.excel.FastExcel;
+import cn.idev.excel.ExcelWriter;
+import cn.idev.excel.write.metadata.WriteSheet;
 import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import jakarta.servlet.http.HttpServletResponse;
 import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.BizCommissionProduct;
 import org.dromara.commission.event.PolicyUnderwrittenEvent;
@@ -43,6 +47,7 @@ import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.mapper.*;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
+import org.dromara.insurance.utils.DynamicInsureFieldUtils;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysDictDataVo;
 import org.dromara.system.domain.vo.SysRoleVo;
@@ -60,9 +65,12 @@ import org.springframework.context.ApplicationContext;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 
@@ -147,6 +155,235 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     public List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);
+    }
+
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
+    public void exportList(InsuranceApplyRecordBo bo, HttpServletResponse response) {
+        List<InsuranceApplyRecordVo> list = queryList(bo);
+        if (bo == null || bo.getProductId() == null) {
+            exportMultiSheetExcel(list, response);
+            return;
+        }
+        InsuranceProductSaveBo productData = productConfigService.getProductFull(bo.getProductId());
+        String schemaJson = productData == null || productData.getProduct() == null ? null : productData.getProduct().getInsureFormSchema();
+        List<DynamicInsureFieldUtils.Field> dynamicFields = DynamicInsureFieldUtils.parseSchema(schemaJson);
+        exportDynamicExcel(list, dynamicFields, response);
+    }
+
+    private void exportDynamicExcel(List<InsuranceApplyRecordVo> list, List<DynamicInsureFieldUtils.Field> dynamicFields, HttpServletResponse response) {
+        List<List<String>> head = new ArrayList<>();
+        buildFixedExportHead().forEach(item -> head.add(Collections.singletonList(item)));
+        Optional.ofNullable(dynamicFields).orElseGet(Collections::emptyList).forEach(field -> head.add(Collections.singletonList(field.getLabel())));
+
+        List<List<Object>> rows = new ArrayList<>();
+        for (InsuranceApplyRecordVo record : list) {
+            enrichPersonInfo(record);
+            List<Object> row = buildFixedExportRow(record);
+
+            Map<String, Object> extraData = StringUtils.isBlank(record.getInsureExtraData()) ? Collections.emptyMap() : JsonUtils.parseMap(record.getInsureExtraData());
+            for (DynamicInsureFieldUtils.Field field : Optional.ofNullable(dynamicFields).orElseGet(Collections::emptyList)) {
+                row.add(DynamicInsureFieldUtils.formatValue(field, extraData.get(field.getKey())));
+            }
+            rows.add(row);
+        }
+
+        try {
+            String fileName = URLEncoder.encode("投保记录.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+            FastExcel.write(response.getOutputStream())
+                .head(head)
+                .autoCloseStream(false)
+                .sheet("投保记录")
+                .doWrite(rows);
+        } catch (IOException e) {
+            throw new ServiceException("导出Excel异常");
+        }
+    }
+
+    private void exportMultiSheetExcel(List<InsuranceApplyRecordVo> list, HttpServletResponse response) {
+        List<InsuranceApplyRecordVo> exportList = Optional.ofNullable(list).orElseGet(Collections::emptyList);
+        exportList.forEach(this::enrichPersonInfo);
+
+        List<List<String>> summaryHead = toExcelHead(buildFixedExportHead());
+        List<List<Object>> summaryRows = exportList.stream().map(this::buildFixedExportRow).toList();
+
+        try {
+            String fileName = URLEncoder.encode("投保记录_多产品.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+
+            try (ExcelWriter writer = FastExcel.write(response.getOutputStream()).autoCloseStream(false).build()) {
+                WriteSheet summarySheet = FastExcel.writerSheet(0, "订单汇总").head(summaryHead).build();
+                writer.write(summaryRows, summarySheet);
+
+                Map<Long, List<InsuranceApplyRecordVo>> productOrderMap = new LinkedHashMap<>();
+                for (InsuranceApplyRecordVo record : exportList) {
+                    if (record.getProductId() != null) {
+                        productOrderMap.computeIfAbsent(record.getProductId(), key -> new ArrayList<>()).add(record);
+                    }
+                }
+
+                Map<Long, List<DynamicInsureFieldUtils.Field>> productFieldCache = new HashMap<>();
+                Map<String, Integer> sheetNameCounter = new HashMap<>();
+                int sheetIndex = 1;
+                for (Map.Entry<Long, List<InsuranceApplyRecordVo>> entry : productOrderMap.entrySet()) {
+                    Long productId = entry.getKey();
+                    List<DynamicInsureFieldUtils.Field> fields = productFieldCache.computeIfAbsent(productId, this::queryProductDynamicFields);
+                    if (CollUtil.isEmpty(fields)) {
+                        continue;
+                    }
+                    String productName = entry.getValue().stream()
+                        .map(InsuranceApplyRecordVo::getProductName)
+                        .filter(StringUtils::isNotBlank)
+                        .findFirst()
+                        .orElse("产品" + productId);
+                    List<List<String>> head = buildProductExtraHead(fields);
+                    List<List<Object>> rows = buildProductExtraRows(entry.getValue(), fields);
+                    WriteSheet sheet = FastExcel.writerSheet(sheetIndex++, uniqueSheetName(productName + "-扩展字段", sheetNameCounter)).head(head).build();
+                    writer.write(rows, sheet);
+                }
+            }
+        } catch (IOException e) {
+            throw new ServiceException("导出Excel异常");
+        }
+    }
+
+    private List<String> buildFixedExportHead() {
+        return Arrays.asList(
+            "订单号", "产品编码", "产品名称", "业务员姓名", "客户姓名", "客户手机号", "保单保费", "订单状态", "创建时间",
+            "净费出单保费", "投保模式", "产品模式", "支付模式", "是否批量单", "所属批次单号",
+            "投保人姓名", "投保人证件类型", "投保人证件号",
+            "投保人手机号", "投保人地址", "被保人关系", "被保人姓名", "被保人证件类型", "被保人证件号", "被保人手机号", "被保人地址"
+        );
+    }
+
+    private List<Object> buildFixedExportRow(InsuranceApplyRecordVo record) {
+        List<Object> row = new ArrayList<>();
+        row.add(record.getOrderNo());
+        row.add(record.getProductCode());
+        row.add(record.getProductName());
+        row.add(record.getAgentName());
+        row.add(record.getCustomerName());
+        row.add(record.getCustomerMobile());
+        row.add(record.getPremium());
+        row.add(translateDict("insurance_apply_status", record.getStatus()));
+        row.add(formatDate(record.getCreateTime()));
+        row.add(record.getNetPremium());
+        row.add(translateDict("insurance_product_insure_mode", record.getInsureMode()));
+        row.add(translateDict("insurance_product_mode", record.getProductMode()));
+        row.add(translateDict("insurance_product_payment_mode", record.getPaymentMode()));
+        row.add(record.getIsBatch());
+        row.add(record.getBatchOrderNo());
+        row.add(record.getAppName());
+        row.add(translateDict("insurance_id_type", record.getAppCertType()));
+        row.add(record.getAppCertNo());
+        row.add(record.getAppPhone());
+        row.add(record.getAppAddress());
+        row.add(translateDict("insurance_relationship_to_insured", record.getRelation()));
+        row.add(record.getInsuredName());
+        row.add(translateDict("insurance_id_type", record.getInsuredCertType()));
+        row.add(record.getInsuredCertNo());
+        row.add(record.getInsuredPhone());
+        row.add(record.getInsuredAddress());
+        return row;
+    }
+
+    private List<List<String>> buildProductExtraHead(List<DynamicInsureFieldUtils.Field> fields) {
+        List<List<String>> head = toExcelHead(Arrays.asList("订单号", "产品名称", "客户姓名", "客户手机号", "被保人姓名"));
+        fields.forEach(field -> head.add(Collections.singletonList(field.getLabel())));
+        return head;
+    }
+
+    private List<List<Object>> buildProductExtraRows(List<InsuranceApplyRecordVo> records, List<DynamicInsureFieldUtils.Field> fields) {
+        List<List<Object>> rows = new ArrayList<>();
+        for (InsuranceApplyRecordVo record : records) {
+            List<Object> row = new ArrayList<>();
+            row.add(record.getOrderNo());
+            row.add(record.getProductName());
+            row.add(record.getCustomerName());
+            row.add(record.getCustomerMobile());
+            row.add(record.getInsuredName());
+            Map<String, Object> extraData = StringUtils.isBlank(record.getInsureExtraData()) ? Collections.emptyMap() : JsonUtils.parseMap(record.getInsureExtraData());
+            for (DynamicInsureFieldUtils.Field field : fields) {
+                row.add(DynamicInsureFieldUtils.formatValue(field, extraData.get(field.getKey())));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private List<List<String>> toExcelHead(List<String> heads) {
+        return heads.stream().map(Collections::singletonList).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    }
+
+    private List<DynamicInsureFieldUtils.Field> queryProductDynamicFields(Long productId) {
+        if (productId == null) {
+            return Collections.emptyList();
+        }
+        try {
+            InsuranceProductSaveBo productData = productConfigService.getProductFull(productId);
+            String schemaJson = productData == null || productData.getProduct() == null ? null : productData.getProduct().getInsureFormSchema();
+            return DynamicInsureFieldUtils.parseSchema(schemaJson);
+        } catch (Exception e) {
+            log.warn("导出投保记录时查询产品 {} 扩展字段失败", productId, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private String uniqueSheetName(String rawName, Map<String, Integer> sheetNameCounter) {
+        String baseName = sanitizeSheetName(rawName);
+        int count = sheetNameCounter.getOrDefault(baseName, 0);
+        sheetNameCounter.put(baseName, count + 1);
+        if (count == 0) {
+            return baseName;
+        }
+        String suffix = "_" + (count + 1);
+        int maxBaseLength = Math.max(1, 31 - suffix.length());
+        return baseName.substring(0, Math.min(baseName.length(), maxBaseLength)) + suffix;
+    }
+
+    private String sanitizeSheetName(String rawName) {
+        String name = StringUtils.isBlank(rawName) ? "扩展字段" : rawName;
+        for (String item : Arrays.asList("\\", "/", ":", "*", "?", "[", "]")) {
+            name = name.replace(item, "");
+        }
+        name = name.trim();
+        if (StringUtils.isBlank(name)) {
+            name = "扩展字段";
+        }
+        return name.length() > 31 ? name.substring(0, 31) : name;
+    }
+
+    private void enrichPersonInfo(InsuranceApplyRecordVo record) {
+        if (record == null || StringUtils.isBlank(record.getOrderNo())) {
+            return;
+        }
+        InsuranceOrderApplicant applicant = insuranceOrderApplicantMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+            .eq(InsuranceOrderApplicant::getOrderNo, record.getOrderNo()));
+        if (applicant != null) {
+            record.setAppName(applicant.getApplicantName());
+            record.setAppCertType(applicant.getApplicantCertType());
+            record.setAppCertNo(applicant.getApplicantCertNo());
+            record.setAppPhone(applicant.getApplicantPhone());
+            record.setAppAddress(applicant.getApplicantAddress());
+        }
+        InsuranceOrderInsured insured = insuranceOrderInsuredMapper.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+            .eq(InsuranceOrderInsured::getOrderNo, record.getOrderNo()));
+        if (insured != null) {
+            record.setRelation(insured.getRelation());
+            record.setInsuredName(insured.getInsuredName());
+            record.setInsuredCertType(insured.getInsuredCertType());
+            record.setInsuredCertNo(insured.getInsuredCertNo());
+            record.setInsuredPhone(insured.getInsuredPhone());
+            record.setInsuredAddress(insured.getInsuredAddress());
+        }
     }
 
     @Override
@@ -240,6 +477,14 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
                 result.put("relation", insured.getRelation());
                 result.put("insuredAddress", insured.getInsuredAddress());
             }
+
+            InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                .eq(InsuranceApplyRecord::getOrderNo, orderNo)
+                .eq(InsuranceApplyRecord::getDelFlag, "0"));
+            if (record != null) {
+                result.put("productId", record.getProductId());
+                result.put("insureExtraData", record.getInsureExtraData());
+            }
         });
 
         return result;
@@ -324,6 +569,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             appendApplicantInfo(html, record, applicant);
             appendInsuredInfo(html, insured);
         }
+        appendExtraInsureInfo(html, record, productData);
         appendLiabilityInfo(html, productData);
         appendClauseInfo(html, productData);
         appendClaimInfo(html, productData);
@@ -370,6 +616,40 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             .append(row("与投保人关系", insured == null ? null : translateDict("insurance_relationship_to_insured", insured.getRelation()), "证件类型", insured == null ? null : translateDict("insurance_id_type", insured.getInsuredCertType())))
             .append(row("联系电话", insured == null ? null : insured.getInsuredPhone(), "联系地址", insured == null ? null : insured.getInsuredAddress()))
             .append("</tbody></table>");
+    }
+
+    private void appendExtraInsureInfo(StringBuilder html, InsuranceApplyRecord record, InsuranceProductSaveBo productData) {
+        String schemaJson = productData == null || productData.getProduct() == null ? null : productData.getProduct().getInsureFormSchema();
+        if (StringUtils.isBlank(schemaJson) || StringUtils.isBlank(record.getInsureExtraData())) {
+            return;
+        }
+        List<DynamicInsureFieldUtils.Field> fields = DynamicInsureFieldUtils.parseSchema(schemaJson);
+        Map<String, Object> dataMap = JsonUtils.parseMap(record.getInsureExtraData());
+        if (CollUtil.isEmpty(fields) || dataMap == null || dataMap.isEmpty()) {
+            return;
+        }
+        StringBuilder rows = new StringBuilder();
+        for (DynamicInsureFieldUtils.Field field : fields) {
+            if (field == null || StringUtils.isBlank(field.getLabel()) || StringUtils.isBlank(field.getKey()) || !dataMap.containsKey(field.getKey())) {
+                continue;
+            }
+            rows.append("<tr><td class=\"label\">").append(escapeHtml(field.getLabel())).append("</td><td class=\"value\" colspan=\"3\">")
+                .append(escapeHtml(display(DynamicInsureFieldUtils.formatValue(field, dataMap.get(field.getKey())), "--"))).append("</td></tr>");
+        }
+        if (rows.isEmpty()) {
+            return;
+        }
+        html.append("<div class=\"section-title\">投保扩展信息</div><table><tbody>").append(rows).append("</tbody></table>");
+    }
+
+    private String formatExtraValue(Object value) {
+        if (value == null) {
+            return "--";
+        }
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("、"));
+        }
+        return String.valueOf(value);
     }
 
     private void appendLiabilityInfo(StringBuilder html, InsuranceProductSaveBo productData) {
@@ -526,6 +806,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         lqw.orderByDesc(InsuranceApplyRecord::getId);
         lqw.eq(InsuranceApplyRecord::getDelFlag, "0");
         lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), InsuranceApplyRecord::getOrderNo, bo.getOrderNo());
+        lqw.eq(bo.getProductId() != null, InsuranceApplyRecord::getProductId, bo.getProductId());
         lqw.eq(StringUtils.isNotBlank(bo.getProductCode()), InsuranceApplyRecord::getProductCode, bo.getProductCode());
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), InsuranceApplyRecord::getProductName, bo.getProductName());
         lqw.like(StringUtils.isNotBlank(bo.getAgentName()), InsuranceApplyRecord::getAgentName, bo.getAgentName());
@@ -721,6 +1002,11 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             insuranceOrderInsuredMapper.insertBatch(insuredEntityList);
         }
 
+        InsuranceApplyRecord extraUpdate = new InsuranceApplyRecord();
+        extraUpdate.setId(record.getId());
+        extraUpdate.setInsureExtraData(JsonUtils.toJsonString(infoDTO.getExtraData()));
+        baseMapper.updateById(extraUpdate);
+
         // 准备通用的返回对象
         SaveInsureResultVO saveInsureResultVO = new SaveInsureResultVO();
         saveInsureResultVO.setOrderNo(orderNo);
@@ -791,6 +1077,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         update.setReceiverMobile(infoDTO.getReceiverMobile());
         update.setReceiverAddress(infoDTO.getReceiverAddress());
         update.setSelectedCompanyCode(infoDTO.getSelectedCompanyCode());
+        update.setInsureExtraData(JsonUtils.toJsonString(infoDTO.getExtraData()));
         update.setNetPremium(record.getPremium());
         update.setStatus(3);
         baseMapper.updateById(update);
@@ -1176,6 +1463,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             subOrder.setNetPremium(netPremium);
             subOrder.setCustomerName(dto.getName());
             subOrder.setCustomerMobile(dto.getPhone());
+            subOrder.setInsureExtraData(CollUtil.isEmpty(dto.getExtraData()) ? null : JsonUtils.toJsonString(dto.getExtraData()));
             baseMapper.insert(subOrder);
 
             // 投保人记录

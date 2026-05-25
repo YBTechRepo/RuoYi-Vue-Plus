@@ -109,8 +109,7 @@ public class InsuranceApplyRecordController extends BaseController {
     @Log(title = "投保记录", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(InsuranceApplyRecordBo bo, HttpServletResponse response) {
-        List<InsuranceApplyRecordVo> list = insuranceApplyRecordService.queryList(bo);
-        ExcelUtil.exportExcel(list, "投保记录", InsuranceApplyRecordVo.class, response);
+        insuranceApplyRecordService.exportList(bo, response);
     }
 
     /**
