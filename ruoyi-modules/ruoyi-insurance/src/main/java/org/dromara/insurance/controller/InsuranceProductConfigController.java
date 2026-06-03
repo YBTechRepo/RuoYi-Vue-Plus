@@ -203,7 +203,7 @@ public class InsuranceProductConfigController extends BaseController {
     }
 
     /**
-     * 将全部平台下架产品状态同步到各租户产品库
+     * 将全部平台产品状态同步到各租户产品库
      */
     @SaCheckRole(TenantConstants.SUPER_ADMIN_ROLE_KEY)
     @SaCheckPermission("insurance:InsuranceProductConfig:syncProduct")

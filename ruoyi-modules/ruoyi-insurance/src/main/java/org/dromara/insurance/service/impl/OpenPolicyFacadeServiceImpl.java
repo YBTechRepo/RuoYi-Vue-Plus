@@ -178,8 +178,9 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             calcParam.setProductId(product.getId());
             calcParam.setProductName(product.getProductName());
             calcParam.setTenantId(tenantId);
-            calcParam.setPolicyPremium(new BigDecimal(policyDto.getPrem()));
-            calcParam.setNetPremium(new BigDecimal(policyDto.getPrem())); // 常规保单实交保费等于原价
+            BigDecimal premium = parseAmountOrZero(policyDto.getPrem());
+            calcParam.setPolicyPremium(premium);
+            calcParam.setNetPremium(premium); // 常规保单实交保费等于原价
 
             // 🌟 强行将佣金参数的创建人和部门，锚定为该业务员！
             // 配合咱们刚才写的 calcCommission 里的 recordBo.setCreateBy(...)，佣金记录就完美隔离了
@@ -219,8 +220,8 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         insurancePolicyBo.setAgentName(sysUser.getNickName());
         insurancePolicyBo.setAgentUserId(sysUser.getUserId());
         insurancePolicyBo.setAgentDeptId(sysUser.getDeptId());
-        insurancePolicyBo.setPremium(new BigDecimal(policyCallbackDto.getPolicy().getPrem()));
-        insurancePolicyBo.setAmt(new BigDecimal(policyCallbackDto.getPolicy().getAmt()));
+        insurancePolicyBo.setPremium(parseAmountOrZero(policyCallbackDto.getPolicy().getPrem()));
+        insurancePolicyBo.setAmt(parseAmountOrZero(policyCallbackDto.getPolicy().getAmt()));
         // 未结算
         insurancePolicyBo.setCommissionStatus(1);
         // 已生效
@@ -255,6 +256,10 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         }
 
         return insurancePolicyBo.getId();
+    }
+
+    private BigDecimal parseAmountOrZero(String amount) {
+        return amount == null || amount.trim().isEmpty() ? BigDecimal.ZERO : new BigDecimal(amount);
     }
 
 

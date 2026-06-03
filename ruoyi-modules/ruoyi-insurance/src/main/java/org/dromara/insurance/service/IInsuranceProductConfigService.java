@@ -149,7 +149,7 @@ public interface IInsuranceProductConfigService {
     Map<String, Object> syncAllTenantProducts();
 
     /**
-     * 将全部平台下架产品状态同步到各租户产品库
+     * 将全部平台产品状态同步到各租户产品库
      *
      * @return 同步统计
      */

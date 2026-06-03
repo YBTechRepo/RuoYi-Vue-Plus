@@ -824,6 +824,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         int skippedCount = 0;
         int failCount = 0;
         Set<String> affectedTenantIds = new HashSet<>();
+        List<Map<String, Object>> details = new ArrayList<>();
 
         for (Long productId : distinctProductIds) {
             InsuranceProductConfig product = productMap.get(productId);
@@ -853,6 +854,8 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
             String commissionConfigJson = JsonUtils.toJsonString(commissionConfigs);
             ProductCommissionConfig firstConfig = commissionConfigs.get(0);
+            int productSuccessCount = 0;
+            int productFailCount = 0;
 
             for (String tenantId : tenantIds) {
                 try {
@@ -883,11 +886,21 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                         return null;
                     });
                     successCount++;
+                    productSuccessCount++;
                     affectedTenantIds.add(tenantId);
                 } catch (Exception e) {
                     log.warn("同步租户佣金配置失败，tenantId={}, productId={}", tenantId, productId, e);
                     failCount++;
+                    productFailCount++;
                 }
+            }
+
+            if (productSuccessCount > 0) {
+                Map<String, Object> detail = buildProductSyncDetail(product, "commission", "同步佣金配置");
+                detail.put("tenantCount", productSuccessCount);
+                detail.put("successCount", productSuccessCount);
+                detail.put("failCount", productFailCount);
+                details.add(detail);
             }
         }
 
@@ -897,6 +910,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         result.put("successCount", successCount);
         result.put("skippedCount", skippedCount);
         result.put("failCount", failCount);
+        result.put("details", details);
         return result;
     }
 
@@ -944,6 +958,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         int skippedCount = 0;
         int failCount = 0;
         Set<String> affectedTenantIds = new HashSet<>();
+        List<Map<String, Object>> details = new ArrayList<>();
 
         if (CollUtil.isEmpty(enabledTenantIds)) {
             skippedCount = distinctProductIds.size();
@@ -953,6 +968,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             result.put("successCount", successCount);
             result.put("skippedCount", skippedCount);
             result.put("failCount", failCount);
+            result.put("details", details);
             return result;
         }
 
@@ -963,9 +979,12 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                 continue;
             }
 
+            int addCount = 0;
+            int updateCount = 0;
+            int productFailCount = 0;
             for (String tenantId : enabledTenantIds) {
                 try {
-                    TenantHelper.dynamic(tenantId, () -> {
+                    Boolean isAdd = TenantHelper.dynamic(tenantId, () -> {
                         InsuranceTenantProduct existing = insuranceTenantProductMapper.selectOne(
                             Wrappers.<InsuranceTenantProduct>lambdaQuery()
                                 .eq(InsuranceTenantProduct::getProductId, product.getId())
@@ -980,6 +999,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                             add.setCategoryName(product.getCategoryName());
                             add.setMarketingTags(product.getMarketingTags());
                             insuranceTenantProductMapper.insert(add);
+                            return true;
                         } else {
                             insuranceTenantProductMapper.update(null,
                                 Wrappers.<InsuranceTenantProduct>lambdaUpdate()
@@ -988,15 +1008,30 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                                     .set(InsuranceTenantProduct::getCategoryName, product.getCategoryName())
                                     .set(InsuranceTenantProduct::getMarketingTags, product.getMarketingTags())
                             );
+                            return false;
                         }
-                        return null;
                     });
                     successCount++;
+                    if (Boolean.TRUE.equals(isAdd)) {
+                        addCount++;
+                    } else {
+                        updateCount++;
+                    }
                     affectedTenantIds.add(tenantId);
                 } catch (Exception e) {
                     log.warn("同步租户产品失败，tenantId={}, productId={}", tenantId, productId, e);
                     failCount++;
+                    productFailCount++;
                 }
+            }
+
+            if (addCount > 0 || updateCount > 0) {
+                Map<String, Object> detail = buildProductSyncDetail(product, "tenantProduct", "同步新增产品");
+                detail.put("tenantCount", addCount + updateCount);
+                detail.put("addCount", addCount);
+                detail.put("updateCount", updateCount);
+                detail.put("failCount", productFailCount);
+                details.add(detail);
             }
         }
 
@@ -1006,6 +1041,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         result.put("successCount", successCount);
         result.put("skippedCount", skippedCount);
         result.put("failCount", failCount);
+        result.put("details", details);
         return result;
     }
 
@@ -1023,27 +1059,38 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
 
     @Override
     public Map<String, Object> syncAllTenantProductStatus() {
-        List<Long> disabledProductIds = TenantHelper.dynamic("000000", () -> baseMapper.selectObjs(
-                Wrappers.<InsuranceProductConfig>lambdaQuery()
-                    .select(InsuranceProductConfig::getId)
-                    .eq(InsuranceProductConfig::getStatus, 1)
-            ).stream()
-            .filter(Objects::nonNull)
-            .map(item -> (Long) item)
-            .toList());
+        List<InsuranceProductConfig> platformProducts = TenantHelper.dynamic("000000", () -> baseMapper.selectList(
+            Wrappers.<InsuranceProductConfig>lambdaQuery()
+                .select(InsuranceProductConfig::getId, InsuranceProductConfig::getProductCode, InsuranceProductConfig::getProductName, InsuranceProductConfig::getStatus)
+                .isNotNull(InsuranceProductConfig::getStatus)
+        ));
+        Map<Long, InsuranceProductConfig> productMap = platformProducts.stream()
+            .filter(product -> product.getId() != null)
+            .collect(Collectors.toMap(InsuranceProductConfig::getId, product -> product, (a, b) -> a, LinkedHashMap::new));
+
+        Map<String, List<Long>> productStatusMap = platformProducts.stream()
+            .filter(product -> product.getId() != null && product.getStatus() != null)
+            .collect(Collectors.groupingBy(
+                product -> String.valueOf(product.getStatus()),
+                LinkedHashMap::new,
+                Collectors.mapping(InsuranceProductConfig::getId, Collectors.toList())
+            ));
+        int productCount = productStatusMap.values().stream().mapToInt(List::size).sum();
 
         int successCount = 0;
         int skippedCount = 0;
         int failCount = 0;
         Set<String> affectedTenantIds = new HashSet<>();
+        Map<Long, Integer> statusChangeCountMap = new LinkedHashMap<>();
 
-        if (CollUtil.isEmpty(disabledProductIds)) {
+        if (CollUtil.isEmpty(platformProducts)) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("productCount", 0);
             result.put("tenantCount", 0);
             result.put("successCount", successCount);
             result.put("skippedCount", skippedCount);
             result.put("failCount", failCount);
+            result.put("details", Collections.emptyList());
             return result;
         }
 
@@ -1058,27 +1105,48 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
         if (CollUtil.isEmpty(enabledTenantIds)) {
-            skippedCount = disabledProductIds.size();
+            skippedCount = productCount;
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("productCount", disabledProductIds.size());
+            result.put("productCount", productCount);
             result.put("tenantCount", 0);
             result.put("successCount", successCount);
             result.put("skippedCount", skippedCount);
             result.put("failCount", failCount);
+            result.put("details", Collections.emptyList());
             return result;
         }
 
         for (String tenantId : enabledTenantIds) {
             try {
-                Integer updateCount = TenantHelper.dynamic(tenantId, () -> insuranceTenantProductMapper.update(null,
-                    Wrappers.<InsuranceTenantProduct>lambdaUpdate()
-                        .in(InsuranceTenantProduct::getProductId, disabledProductIds)
-                        .and(wrapper -> wrapper.ne(InsuranceTenantProduct::getStatus, "1").or().isNull(InsuranceTenantProduct::getStatus))
-                        .set(InsuranceTenantProduct::getStatus, "1")
-                ));
+                List<Long> changedProductIds = TenantHelper.dynamic(tenantId, () -> {
+                    List<Long> changedIds = new ArrayList<>();
+                    for (Map.Entry<String, List<Long>> entry : productStatusMap.entrySet()) {
+                        List<InsuranceTenantProduct> changedProducts = insuranceTenantProductMapper.selectList(
+                            Wrappers.<InsuranceTenantProduct>lambdaQuery()
+                                .select(InsuranceTenantProduct::getProductId)
+                                .in(InsuranceTenantProduct::getProductId, entry.getValue())
+                                .and(wrapper -> wrapper.ne(InsuranceTenantProduct::getStatus, entry.getKey()).or().isNull(InsuranceTenantProduct::getStatus))
+                        );
+                        if (CollUtil.isEmpty(changedProducts)) {
+                            continue;
+                        }
+                        insuranceTenantProductMapper.update(null,
+                            Wrappers.<InsuranceTenantProduct>lambdaUpdate()
+                                .in(InsuranceTenantProduct::getProductId, entry.getValue())
+                                .and(wrapper -> wrapper.ne(InsuranceTenantProduct::getStatus, entry.getKey()).or().isNull(InsuranceTenantProduct::getStatus))
+                                .set(InsuranceTenantProduct::getStatus, entry.getKey())
+                        );
+                        changedProducts.stream()
+                            .map(InsuranceTenantProduct::getProductId)
+                            .filter(Objects::nonNull)
+                            .forEach(changedIds::add);
+                    }
+                    return changedIds;
+                });
 
-                if (updateCount != null && updateCount > 0) {
-                    successCount += updateCount;
+                if (CollUtil.isNotEmpty(changedProductIds)) {
+                    successCount += changedProductIds.size();
+                    changedProductIds.forEach(productId -> statusChangeCountMap.merge(productId, 1, Integer::sum));
                     affectedTenantIds.add(tenantId);
                 } else {
                     skippedCount++;
@@ -1089,13 +1157,48 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             }
         }
 
+        List<Map<String, Object>> details = statusChangeCountMap.entrySet().stream()
+            .map(entry -> {
+                InsuranceProductConfig product = productMap.get(entry.getKey());
+                Map<String, Object> detail = buildProductSyncDetail(product, "status", "同步上下架状态");
+                String status = product == null || product.getStatus() == null ? "" : String.valueOf(product.getStatus());
+                detail.put("status", status);
+                detail.put("statusLabel", getProductStatusName(status));
+                detail.put("tenantCount", entry.getValue());
+                return detail;
+            })
+            .toList();
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("productCount", disabledProductIds.size());
+        result.put("productCount", productCount);
         result.put("tenantCount", affectedTenantIds.size());
         result.put("successCount", successCount);
         result.put("skippedCount", skippedCount);
         result.put("failCount", failCount);
+        result.put("details", details);
         return result;
+    }
+
+    private Map<String, Object> buildProductSyncDetail(InsuranceProductConfig product, String type, String action) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("type", type);
+        detail.put("action", action);
+        if (product != null) {
+            detail.put("productId", product.getId());
+            detail.put("productCode", product.getProductCode());
+            detail.put("productName", product.getProductName());
+        }
+        return detail;
+    }
+
+    private String getProductStatusName(String status) {
+        if ("0".equals(status)) {
+            return "上架";
+        }
+        if ("1".equals(status)) {
+            return "下架";
+        }
+        return status;
     }
 
     private List<ProductCommissionConfig> buildCommissionConfigs(String serviceFeeConfig) {
