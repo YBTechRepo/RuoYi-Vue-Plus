@@ -91,6 +91,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
     private final InsuranceOrderInsuredMapper insuranceOrderInsuredMapper;
 
+    private final InsurancePolicyMapper insurancePolicyMapper;
+
     private final InsuranceProductCommissionMapper insuranceProductCommissionMapper;
 
     private final IBizUserAccountService userAccountService;
@@ -527,6 +529,78 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             }
         }
 
+        return renderVoucherPdf(record, applicant, insured, productData);
+    }
+
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "create_dept"),
+        @DataColumn(key = "userName", value = "create_by")
+    })
+    public VoucherPdfResult generateVoucherPdfByPolicyNo(String policyNo) {
+        if (StringUtils.isBlank(policyNo)) {
+            throw new ServiceException("保单号不能为空");
+        }
+
+        InsurancePolicy policy = insurancePolicyMapper.selectOne(new LambdaQueryWrapper<InsurancePolicy>()
+            .eq(InsurancePolicy::getPolicyNo, policyNo));
+        if (policy == null) {
+            throw new ServiceException("保单不存在");
+        }
+
+        if (StringUtils.isNotBlank(policy.getOrderNo()) && !StringUtils.equals(policy.getOrderNo(), policy.getPolicyNo())) {
+            try {
+                return generateVoucherPdf(policy.getOrderNo());
+            } catch (ServiceException e) {
+                log.warn("保单 {} 关联订单 {} 生成投保凭证失败，将使用保单信息生成凭证", policyNo, policy.getOrderNo(), e);
+            }
+        }
+
+        InsuranceApplyRecord record = new InsuranceApplyRecord();
+        record.setOrderNo(policy.getPolicyNo());
+        record.setProductId(policy.getProductId());
+        record.setProductCode(policy.getProductCode());
+        record.setProductName(policy.getProductName());
+        record.setAgentName(policy.getAgentName());
+        record.setAgentUserId(policy.getAgentUserId());
+        record.setAgentDeptId(policy.getAgentDeptId());
+        record.setCustomerName(policy.getApplicantName());
+        record.setCustomerMobile(policy.getApplicantMobile());
+        record.setPremium(policy.getPremium());
+        record.setStatus(policy.getStatus());
+        record.setCommissionStatus(policy.getCommissionStatus());
+        record.setInsureMode(1);
+        record.setIsBatch(0);
+        record.setCreateTime(policy.getAppntDate());
+
+        InsuranceOrderApplicant applicant = new InsuranceOrderApplicant();
+        applicant.setOrderNo(policy.getPolicyNo());
+        applicant.setApplicantName(policy.getApplicantName());
+        applicant.setApplicantCertNo(policy.getApplicantIdNo());
+        applicant.setApplicantCertType(policy.getApplicantIdType());
+        applicant.setApplicantPhone(policy.getApplicantMobile());
+
+        InsuranceOrderInsured insured = new InsuranceOrderInsured();
+        insured.setOrderNo(policy.getPolicyNo());
+        insured.setRelation(policy.getRelationshipToInsured());
+        insured.setInsuredName(policy.getInsuredName());
+        insured.setInsuredCertNo(policy.getInsuredIdNo());
+        insured.setInsuredCertType(policy.getInsuredIdType());
+        insured.setInsuredPhone(policy.getInsuredMobile());
+
+        InsuranceProductSaveBo productData = null;
+        if (policy.getProductId() != null) {
+            try {
+                productData = productConfigService.getProductFull(policy.getProductId());
+            } catch (Exception e) {
+                log.warn("保单 {} 查询产品完整配置失败，PDF 将使用空产品配置", policyNo, e);
+            }
+        }
+
+        return renderVoucherPdf(record, applicant, insured, productData);
+    }
+
+    private VoucherPdfResult renderVoucherPdf(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured, InsuranceProductSaveBo productData) {
         String html = buildVoucherHtml(record, applicant, insured, productData);
         String fileName = sanitizeFileName(display(record.getProductName(), "投保凭证") + "-投保凭证_" + record.getOrderNo() + ".pdf");
 
@@ -539,7 +613,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             builder.run();
             return new VoucherPdfResult(fileName, outputStream.toByteArray());
         } catch (Exception e) {
-            log.error("订单 {} 生成投保凭证 PDF 失败", orderNo, e);
+            log.error("订单 {} 生成投保凭证 PDF 失败", record.getOrderNo(), e);
             throw new ServiceException("生成PDF失败");
         }
     }

@@ -81,6 +81,14 @@ public interface IInsuranceApplyRecordService {
     VoucherPdfResult generateVoucherPdf(String orderNo);
 
     /**
+     * 根据保单号生成投保凭证 PDF
+     *
+     * @param policyNo 保单号
+     * @return PDF 文件名和内容
+     */
+    VoucherPdfResult generateVoucherPdfByPolicyNo(String policyNo);
+
+    /**
      * 查询批量投保的子单列表
      *
      * @param orderNo   主单订单号
