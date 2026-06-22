@@ -7,5 +7,6 @@ import java.util.List;
 @Data
 public class BatchSubmitDTO {
     private Long productId;
+    private String policyStartDate;
     private List<BatchInsuredImportDto> auditList;
 }

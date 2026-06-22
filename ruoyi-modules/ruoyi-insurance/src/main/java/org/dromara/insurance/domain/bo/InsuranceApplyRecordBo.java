@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import java.util.Date;
 
 /**
  * 投保记录业务对象 biz_insurance_apply_record
@@ -181,4 +182,9 @@ public class InsuranceApplyRecordBo extends BaseEntity {
      * 投保扩展字段值 (JSON对象)
      */
     private String insureExtraData;
+
+    /**
+     * 起保日期
+     */
+    private Date policyStartDate;
 }

@@ -16,6 +16,9 @@ public class OrderInsureInfoDTO {
      */
     private Integer productMode;
 
+    @NotBlank(message = "起保日期不能为空")
+    private String policyStartDate;
+
     @NotBlank(message = "投保人姓名不能为空")
     private String applicantName;
 

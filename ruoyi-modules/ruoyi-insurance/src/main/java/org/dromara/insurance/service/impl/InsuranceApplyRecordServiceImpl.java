@@ -34,6 +34,7 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.finance.service.IBizUserAccountService;
 import org.dromara.insurance.domain.*;
 import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
+import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.bo.ProductCommissionConfig;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
@@ -44,6 +45,7 @@ import org.dromara.insurance.domain.dto.OrderInsureInfoDTO;
 import org.dromara.insurance.domain.dto.PayWithBalanceReqDTO;
 import org.dromara.insurance.domain.dto.VoucherPdfResult;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
+import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
 import org.dromara.insurance.domain.vo.SaveInsureResultVO;
 import org.dromara.insurance.mapper.*;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
@@ -160,6 +162,18 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     }
 
     @Override
+    public List<Map<String, Object>> queryProductOptions() {
+        List<InsuranceProductConfigVo> products = productConfigService.queryList(new InsuranceProductConfigBo());
+        return Optional.ofNullable(products).orElseGet(Collections::emptyList).stream().map(product -> {
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("id", product.getId());
+            option.put("productCode", product.getProductCode());
+            option.put("productName", product.getProductName());
+            return option;
+        }).toList();
+    }
+
+    @Override
     @DataPermission({
         @DataColumn(key = "deptName", value = "create_dept"),
         @DataColumn(key = "userName", value = "create_by")
@@ -259,7 +273,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
     private List<String> buildFixedExportHead() {
         return Arrays.asList(
-            "订单号", "产品编码", "产品名称", "业务员姓名", "客户姓名", "客户手机号", "保单保费", "订单状态", "创建时间",
+            "订单号", "产品编码", "产品名称", "业务员姓名", "客户姓名", "客户手机号", "保单保费", "起保日期", "订单状态", "创建时间",
             "净费出单保费", "投保模式", "产品模式", "支付模式", "是否批量单", "所属批次单号",
             "投保人姓名", "投保人证件类型", "投保人证件号",
             "投保人手机号", "投保人地址", "被保人关系", "被保人姓名", "被保人证件类型", "被保人证件号", "被保人手机号", "被保人地址"
@@ -275,6 +289,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         row.add(record.getCustomerName());
         row.add(record.getCustomerMobile());
         row.add(record.getPremium());
+        row.add(formatDate(record.getPolicyStartDate()));
         row.add(translateDict("insurance_apply_status", record.getStatus()));
         row.add(formatDate(record.getCreateTime()));
         row.add(record.getNetPremium());
@@ -429,6 +444,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
                 map.put("agentName", subOrder.getAgentName());
                 map.put("customerName", subOrder.getCustomerName());
                 map.put("customerMobile", subOrder.getCustomerMobile());
+                map.put("policyStartDate", subOrder.getPolicyStartDate());
                 map.put("createTime", subOrder.getCreateTime());
                 map.put("insureMode", subOrder.getInsureMode());
                 map.put("isBatch", subOrder.getIsBatch());
@@ -485,6 +501,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
                 .eq(InsuranceApplyRecord::getDelFlag, "0"));
             if (record != null) {
                 result.put("productId", record.getProductId());
+                result.put("policyStartDate", record.getPolicyStartDate());
                 result.put("insureExtraData", record.getInsureExtraData());
             }
         });
@@ -571,6 +588,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         record.setCommissionStatus(policy.getCommissionStatus());
         record.setInsureMode(1);
         record.setIsBatch(0);
+        record.setPolicyStartDate(policy.getPolicyStartDate());
         record.setCreateTime(policy.getAppntDate());
 
         InsuranceOrderApplicant applicant = new InsuranceOrderApplicant();
@@ -656,6 +674,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     private void appendOrderInfo(StringBuilder html, InsuranceApplyRecord record) {
         html.append("<div class=\"section-title\">订单信息</div><table><tbody>")
             .append(row("订单号", record.getOrderNo(), "下单时间", formatDate(record.getCreateTime())))
+            .append(row("起保日期", formatDate(record.getPolicyStartDate()), "保单保费", record.getPremium()))
             .append(row("登记客户", record.getCustomerName(), "客户手机号", record.getCustomerMobile()))
             .append("<tr><td class=\"label\">业务员姓名</td><td class=\"value\" colspan=\"3\">").append(escapeHtml(display(record.getAgentName(), "--"))).append("</td></tr>")
             .append("</tbody></table>");
@@ -1045,6 +1064,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
 
         validateRegularInsureInfo(infoDTO);
+        Date policyStartDate = parsePolicyStartDate(infoDTO.getPolicyStartDate());
 
         // ==========================================
         // 1. 幂等性防线：先清理旧数据，防止重复提交产生冗余
@@ -1079,6 +1099,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         InsuranceApplyRecord extraUpdate = new InsuranceApplyRecord();
         extraUpdate.setId(record.getId());
         extraUpdate.setInsureExtraData(JsonUtils.toJsonString(infoDTO.getExtraData()));
+        extraUpdate.setPolicyStartDate(policyStartDate);
         baseMapper.updateById(extraUpdate);
 
         // 准备通用的返回对象
@@ -1163,6 +1184,9 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     }
 
     private void validateRegularInsureInfo(OrderInsureInfoDTO infoDTO) {
+        if (StringUtils.isBlank(infoDTO.getPolicyStartDate())) {
+            throw new ServiceException("起保日期不能为空");
+        }
         if (StringUtils.isBlank(infoDTO.getApplicantName())) {
             throw new ServiceException("投保人姓名不能为空");
         }
@@ -1190,6 +1214,23 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         if (CollUtil.isEmpty(infoDTO.getInsuredList())) {
             throw new ServiceException("至少需要填写一名被保人信息");
         }
+    }
+
+    private Date parsePolicyStartDate(String policyStartDate) {
+        if (StringUtils.isBlank(policyStartDate)) {
+            throw new ServiceException("起保日期不能为空");
+        }
+        Date parsedDate;
+        try {
+            parsedDate = DateUtil.parseDate(policyStartDate);
+        } catch (Exception e) {
+            throw new ServiceException("起保日期格式不正确");
+        }
+        Date minDate = DateUtil.beginOfDay(DateUtil.tomorrow());
+        if (parsedDate.before(minDate)) {
+            throw new ServiceException("起保日期不能早于明天");
+        }
+        return parsedDate;
     }
 
     @Override
@@ -1463,6 +1504,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         if (submitDTO == null || CollUtil.isEmpty(submitDTO.getAuditList())) {
             throw new ServiceException("投保人员名单不能为空");
         }
+        Date policyStartDate = parsePolicyStartDate(submitDTO.getPolicyStartDate());
 
         // 1. 获取产品信息并计算金额 (逻辑同 preview)
         InsuranceSalesProductVo productVo = productConfigService.querySalesProductById(submitDTO.getProductId());
@@ -1500,6 +1542,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         mainOrder.setAgentDeptId(LoginHelper.getDeptId());
         mainOrder.setPremium(totalGrossPremium);
         mainOrder.setNetPremium(totalNetPremium);
+        mainOrder.setPolicyStartDate(policyStartDate);
 
         // 🌟 增加客户信息赋值
         if (CollUtil.isNotEmpty(submitDTO.getAuditList())) {

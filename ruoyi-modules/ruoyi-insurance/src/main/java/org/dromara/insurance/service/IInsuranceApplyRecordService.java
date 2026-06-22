@@ -49,6 +49,13 @@ public interface IInsuranceApplyRecordService {
     List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo);
 
     /**
+     * 查询投保记录产品选项
+     *
+     * @return 产品选项列表
+     */
+    List<Map<String, Object>> queryProductOptions();
+
+    /**
      * 导出投保记录列表，单产品导出时追加投保扩展字段列。
      *
      * @param bo       查询条件

@@ -1,6 +1,7 @@
 package org.dromara.insurance.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.hutool.core.date.DateUtil;
 import cn.idev.excel.FastExcel;
 import cn.idev.excel.context.AnalysisContext;
 import cn.idev.excel.event.AnalysisEventListener;
@@ -130,6 +131,10 @@ public class BatchInsuranceController {
         if (batchSubmitDTO.getAuditList() == null) {
             return R.fail("投保人员名单不能为空");
         }
+        String policyStartDateError = validatePolicyStartDate(batchSubmitDTO.getPolicyStartDate());
+        if (StringUtils.isNotBlank(policyStartDateError)) {
+            return R.fail(policyStartDateError);
+        }
         int validCount = batchSubmitDTO.getAuditList().size();
         log.info("批量投保计算-人数：{}", validCount);
 
@@ -194,6 +199,23 @@ public class BatchInsuranceController {
         InsuranceProductSaveBo productData = insuranceProductConfigService.getProductFull(productId);
         String schema = productData == null || productData.getProduct() == null ? null : productData.getProduct().getInsureFormSchema();
         return DynamicInsureFieldUtils.parseSchema(schema);
+    }
+
+    private String validatePolicyStartDate(String policyStartDate) {
+        if (StringUtils.isBlank(policyStartDate)) {
+            return "起保日期不能为空";
+        }
+        Date parsedDate;
+        try {
+            parsedDate = DateUtil.parseDate(policyStartDate);
+        } catch (Exception e) {
+            return "起保日期格式不正确";
+        }
+        Date minDate = DateUtil.beginOfDay(DateUtil.tomorrow());
+        if (parsedDate.before(minDate)) {
+            return "起保日期不能早于明天";
+        }
+        return null;
     }
 
     private Map<Integer, List<String>> buildDropDownOptions(List<DynamicInsureFieldUtils.Field> dynamicFields) {

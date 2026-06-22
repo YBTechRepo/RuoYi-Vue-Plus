@@ -60,6 +60,15 @@ public class InsuranceApplyRecordController extends BaseController {
     }
 
     /**
+     * 查询投保记录产品选项
+     */
+    @SaCheckPermission("insurance:InsuranceApplyRecord:list")
+    @GetMapping("/productOptions")
+    public R<List<java.util.Map<String, Object>>> productOptions() {
+        return R.ok(insuranceApplyRecordService.queryProductOptions());
+    }
+
+    /**
      * 查询批量投保子单列表
      */
     @SaCheckPermission("insurance:InsuranceApplyRecord:list")

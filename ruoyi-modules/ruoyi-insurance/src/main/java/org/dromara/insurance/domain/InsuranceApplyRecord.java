@@ -177,4 +177,9 @@ public class InsuranceApplyRecord extends TenantEntity {
      * 投保扩展字段值 (JSON对象)
      */
     private String insureExtraData;
+
+    /**
+     * 起保日期
+     */
+    private Date policyStartDate;
 }

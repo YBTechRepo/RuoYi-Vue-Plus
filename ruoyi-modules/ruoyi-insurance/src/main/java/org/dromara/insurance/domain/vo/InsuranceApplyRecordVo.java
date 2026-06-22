@@ -230,6 +230,12 @@ public class InsuranceApplyRecordVo implements Serializable {
     private String insureExtraData;
 
     /**
+     * 起保日期
+     */
+    @ExcelProperty(value = "起保日期")
+    private Date policyStartDate;
+
+    /**
      * 投保人姓名
      */
     @ExcelProperty(value = "投保人姓名")
