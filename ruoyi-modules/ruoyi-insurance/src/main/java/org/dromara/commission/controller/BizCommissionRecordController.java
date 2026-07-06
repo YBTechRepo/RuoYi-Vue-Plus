@@ -5,6 +5,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.*;
+import cn.dev33.satoken.annotation.SaIgnore;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
@@ -17,6 +18,7 @@ import org.dromara.common.core.validate.AddGroup;
 import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.excel.utils.ExcelUtil;
+import org.dromara.commission.domain.bo.CommissionRecalculateBo;
 import org.dromara.commission.domain.vo.BizCommissionRecordVo;
 import org.dromara.commission.domain.bo.BizCommissionRecordBo;
 import org.dromara.commission.service.IBizCommissionRecordService;
@@ -101,5 +103,15 @@ public class BizCommissionRecordController extends BaseController {
     public R<Void> remove(@NotEmpty(message = "主键不能为空")
                           @PathVariable Long[] ids) {
         return toAjax(bizCommissionRecordService.deleteWithValidByIds(List.of(ids), true));
+    }
+
+    /**
+     * 根据订单号或保单号重算佣金。
+     * 该接口用于线上补偿，不挂 SaToken 注解；全局拦截白名单见 security.excludes。
+     */
+    @SaIgnore
+    @PostMapping("/recalculate")
+    public R<String> recalculate(@Validated @RequestBody CommissionRecalculateBo bo) {
+        return R.ok(bizCommissionRecordService.recalculateCommission(bo.getBizNo()));
     }
 }

@@ -94,6 +94,14 @@ public interface IBizCommissionRecordService {
      */
     void calcCommission(CalcCommission calcCommission);
 
+    /**
+     * 根据订单号或保单号重算佣金
+     *
+     * @param bizNo 订单号或保单号
+     * @return 处理结果
+     */
+    String recalculateCommission(String bizNo);
+
     CommissionSummaryVo getAppCommissionSummary(Long userId, String queryMonth);
 
     TableDataInfo<AppCommissionItemVo> queryAppCommissionPageList(AppCommissionQueryBo bo, PageQuery pageQuery, Long userId);

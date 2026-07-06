@@ -242,7 +242,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
 
     private List<String> buildFixedExportHead() {
         return Arrays.asList(
-            "订单号", "产品编码", "产品名称", "业务员姓名", "客户姓名", "客户手机号", "保单保费", "订单状态", "创建时间",
+            "订单号", "产品编码", "产品名称", "业务员姓名", "客户姓名", "客户手机号", "起保日期", "保单保费", "订单状态", "创建时间",
             "净费出单保费", "投保模式", "产品模式", "支付模式", "是否批量单", "所属批次单号",
             "投保人姓名", "投保人证件类型", "投保人证件号", "投保人手机号", "投保人地址",
             "被保人关系", "被保人姓名", "被保人证件类型", "被保人证件号", "被保人手机号", "被保人地址"
@@ -257,6 +257,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
         row.add(record.getAgentName());
         row.add(record.getCustomerName());
         row.add(record.getCustomerMobile());
+        row.add(formatDate(record.getPolicyStartDate()));
         row.add(record.getPremium());
         row.add(translateDict("insurance_apply_status", record.getStatus()));
         row.add(formatDate(record.getCreateTime()));
