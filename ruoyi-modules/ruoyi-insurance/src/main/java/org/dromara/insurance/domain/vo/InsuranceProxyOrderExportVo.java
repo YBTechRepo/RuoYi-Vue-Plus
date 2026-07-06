@@ -42,6 +42,9 @@ public class InsuranceProxyOrderExportVo implements Serializable {
     @ExcelProperty(value = "客户手机号")
     private String customerMobile;
 
+    @ExcelProperty(value = "起保日期")
+    private Date policyStartDate;
+
     @ExcelProperty(value = "保单保费")
     private BigDecimal premium;
 

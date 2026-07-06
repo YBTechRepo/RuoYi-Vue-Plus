@@ -9,6 +9,7 @@ import org.dromara.commission.service.IBizCommissionProductService;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.mybatis.helper.DataPermissionHelper;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -17,10 +18,17 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import org.dromara.common.tenant.helper.TenantHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.insurance.domain.InsuranceApplyRecord;
+import org.dromara.insurance.domain.InsurancePolicy;
 import org.dromara.insurance.domain.InsuranceProductCommission;
+import org.dromara.insurance.mapper.InsuranceApplyRecordMapper;
+import org.dromara.insurance.mapper.InsurancePolicyMapper;
 import org.dromara.insurance.service.IInsuranceProductCommissionService;
 import org.dromara.system.domain.vo.SysDeptVo;
+import org.dromara.system.domain.vo.SysRoleVo;
+import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.service.ISysDeptService;
+import org.dromara.system.service.ISysUserService;
 import org.springframework.stereotype.Service;
 import org.dromara.commission.domain.bo.BizCommissionRecordBo;
 import org.dromara.commission.domain.vo.BizCommissionRecordVo;
@@ -52,6 +60,12 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
     private final IBizCommissionDeptService bizCommissionDeptService;
 
     private final ISysDeptService sysDeptService;
+
+    private final ISysUserService sysUserService;
+
+    private final InsuranceApplyRecordMapper insuranceApplyRecordMapper;
+
+    private final InsurancePolicyMapper insurancePolicyMapper;
 
     /**
      * 查询佣金分配明细
@@ -234,6 +248,212 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
 
         // ================= 4. 兜底处理 =================
         throw new ServiceException("未找到匹配且有效的佣金计算策略");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String recalculateCommission(String bizNo) {
+        if (StringUtils.isBlank(bizNo)) {
+            throw new ServiceException("订单号或保单号不能为空");
+        }
+        String trimBizNo = bizNo.trim();
+
+        InsuranceApplyRecord applyRecord = TenantHelper.ignore(() -> insuranceApplyRecordMapper.selectOne(
+            Wrappers.<InsuranceApplyRecord>lambdaQuery()
+                .eq(InsuranceApplyRecord::getOrderNo, trimBizNo)
+                .eq(InsuranceApplyRecord::getDelFlag, "0")
+                .last("LIMIT 1")
+        ));
+        if (applyRecord != null) {
+            return recalculateApplyRecord(applyRecord);
+        }
+
+        InsurancePolicy policy = TenantHelper.ignore(() -> insurancePolicyMapper.selectOne(
+            Wrappers.<InsurancePolicy>lambdaQuery()
+                .eq(InsurancePolicy::getPolicyNo, trimBizNo)
+                .eq(InsurancePolicy::getDelFlag, "0")
+                .last("LIMIT 1")
+        ));
+        if (policy != null) {
+            return recalculatePolicy(policy);
+        }
+
+        throw new ServiceException("未找到对应的订单或保单");
+    }
+
+    private String recalculateApplyRecord(InsuranceApplyRecord record) {
+        if (!Objects.equals(record.getStatus(), 0)) {
+            throw new ServiceException("订单未完成支付，不能重算佣金");
+        }
+
+        CalcCommission calcParam = buildApplyCalcParam(record);
+        return doRecalculate(calcParam, "订单");
+    }
+
+    private String recalculatePolicy(InsurancePolicy policy) {
+        if (!Objects.equals(policy.getStatus(), 0)) {
+            throw new ServiceException("保单未生效，不能重算佣金");
+        }
+
+        CalcCommission calcParam = buildPolicyCalcParam(policy);
+        return doRecalculate(calcParam, "保单");
+    }
+
+    private String doRecalculate(CalcCommission calcParam, String bizType) {
+        TenantHelper.setDynamic(calcParam.getTenantId());
+        try {
+            return DataPermissionHelper.ignore(() -> {
+                if (commissionRecordExists(calcParam)) {
+                    markCommissionSettled(calcParam);
+                    return bizType + "[" + calcParam.getPolicyNo() + "]已存在佣金记录，已确认结算状态";
+                }
+
+                calcCommission(calcParam);
+                markCommissionSettled(calcParam);
+                return bizType + "[" + calcParam.getPolicyNo() + "]佣金重算成功";
+            });
+        } finally {
+            TenantHelper.clearDynamic();
+        }
+    }
+
+    private boolean commissionRecordExists(CalcCommission calcParam) {
+        Long count = baseMapper.selectCount(Wrappers.<BizCommissionRecord>lambdaQuery()
+            .and(wrapper -> wrapper
+                .eq(BizCommissionRecord::getPolicyId, calcParam.getPolicyId())
+                .or()
+                .eq(BizCommissionRecord::getPolicyNo, calcParam.getPolicyNo())));
+        return count != null && count > 0;
+    }
+
+    private void markCommissionSettled(CalcCommission param) {
+        if (Objects.equals(param.getBizSource(), 1)) {
+            int rows = insuranceApplyRecordMapper.update(null, Wrappers.<InsuranceApplyRecord>lambdaUpdate()
+                .set(InsuranceApplyRecord::getCommissionStatus, 0)
+                .eq(InsuranceApplyRecord::getOrderNo, param.getPolicyNo())
+                .eq(InsuranceApplyRecord::getStatus, 0)
+                .ne(InsuranceApplyRecord::getCommissionStatus, 0));
+            log.info("【投保申请结算状态回写】订单号: {}, 更新行数: {}", param.getPolicyNo(), rows);
+        } else if (Objects.equals(param.getBizSource(), 2)) {
+            int rows = insurancePolicyMapper.update(null, Wrappers.<InsurancePolicy>lambdaUpdate()
+                .set(InsurancePolicy::getCommissionStatus, 0)
+                .eq(InsurancePolicy::getPolicyNo, param.getPolicyNo())
+                .eq(InsurancePolicy::getStatus, 0)
+                .ne(InsurancePolicy::getCommissionStatus, 0));
+            log.info("【保单结算状态回写】保单号: {}, 更新行数: {}", param.getPolicyNo(), rows);
+        }
+    }
+
+    private CalcCommission buildApplyCalcParam(InsuranceApplyRecord record) {
+        SysUserVo salesUser = selectSalesUser(record.getAgentUserId());
+
+        CalcCommission calcParam = new CalcCommission();
+        calcParam.setBizSource(1);
+        calcParam.setPolicyId(record.getId());
+        calcParam.setPolicyNo(record.getOrderNo());
+        calcParam.setProductId(record.getProductId());
+        calcParam.setProductName(record.getProductName());
+        calcParam.setTenantId(StringUtils.isNotBlank(salesUser.getTenantId()) ? salesUser.getTenantId() : record.getTenantId());
+        calcParam.setCreateById(record.getAgentUserId());
+        calcParam.setCreateDeptId(record.getAgentDeptId());
+        calcParam.setPolicyPremium(record.getPremium());
+        calcParam.setNetPremium(record.getNetPremium() != null ? record.getNetPremium() : record.getPremium());
+        calcParam.setPaymentMode(record.getPaymentMode());
+        calcParam.setPayerUserId(record.getAgentUserId());
+        fillUserHierarchy(calcParam, salesUser, record.getAgentDeptId());
+        return calcParam;
+    }
+
+    private CalcCommission buildPolicyCalcParam(InsurancePolicy policy) {
+        SysUserVo salesUser = selectSalesUser(policy.getAgentUserId());
+
+        CalcCommission calcParam = new CalcCommission();
+        calcParam.setBizSource(2);
+        calcParam.setPolicyId(policy.getId());
+        calcParam.setPolicyNo(policy.getPolicyNo());
+        calcParam.setProductId(policy.getProductId());
+        calcParam.setProductName(policy.getProductName());
+        calcParam.setTenantId(StringUtils.isNotBlank(policy.getTenantId()) ? policy.getTenantId() : salesUser.getTenantId());
+        calcParam.setCreateById(policy.getAgentUserId());
+        calcParam.setCreateDeptId(policy.getAgentDeptId());
+        calcParam.setPolicyPremium(policy.getPremium());
+        calcParam.setNetPremium(policy.getPremium());
+        fillUserHierarchy(calcParam, salesUser, policy.getAgentDeptId());
+        return calcParam;
+    }
+
+    private SysUserVo selectSalesUser(Long userId) {
+        if (userId == null) {
+            throw new ServiceException("业务员信息不存在");
+        }
+        SysUserVo salesUser = sysUserService.selectUserById(userId);
+        if (salesUser == null) {
+            throw new ServiceException("业务员信息不存在");
+        }
+        return salesUser;
+    }
+
+    private void fillUserHierarchy(CalcCommission calcParam, SysUserVo salesUser, Long salesDeptId) {
+        List<SysRoleVo> roles = salesUser.getRoles();
+        if (roles == null || roles.isEmpty()) {
+            throw new ServiceException("该业务员未配置角色，无法计算佣金");
+        }
+
+        SysDeptVo currentDept = sysDeptService.selectDeptById(salesDeptId);
+        if (currentDept == null) {
+            throw new ServiceException("业务员所属机构不存在");
+        }
+
+        Long salesUserId = salesUser.getUserId();
+        String roleKey = roles.get(0).getRoleKey();
+        String deptCategory = currentDept.getDeptCategory();
+
+        if ("bizman".equals(roleKey)) {
+            calcParam.setSalesUserId(salesUserId);
+            calcParam.setSalesUserName(salesUser.getNickName());
+
+            Long directLeaderId = currentDept.getLeader();
+            SysUserVo directLeader = directLeaderId != null ? sysUserService.selectUserById(directLeaderId) : null;
+            String directLeaderName = directLeader != null ? directLeader.getNickName() : "";
+
+            if ("2".equals(deptCategory)) {
+                calcParam.setTeamUserId(directLeaderId);
+                calcParam.setTeamUserName(directLeaderName);
+
+                SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
+                if (parentDept != null) {
+                    Long projectLeaderId = parentDept.getLeader();
+                    SysUserVo projectLeader = projectLeaderId != null ? sysUserService.selectUserById(projectLeaderId) : null;
+                    calcParam.setProjectUserId(projectLeaderId);
+                    calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
+                }
+            } else if ("1".equals(deptCategory)) {
+                calcParam.setTeamUserId(null);
+                calcParam.setTeamUserName("");
+                calcParam.setProjectUserId(directLeaderId);
+                calcParam.setProjectUserName(directLeaderName);
+            }
+        } else if ("teamleader".equals(roleKey)) {
+            calcParam.setSalesUserId(salesUserId);
+            calcParam.setSalesUserName(salesUser.getNickName());
+            calcParam.setTeamUserId(salesUserId);
+            calcParam.setTeamUserName(salesUser.getNickName());
+
+            SysDeptVo parentDept = sysDeptService.selectDeptById(currentDept.getParentId());
+            if (parentDept != null) {
+                Long projectLeaderId = parentDept.getLeader();
+                SysUserVo projectLeader = projectLeaderId != null ? sysUserService.selectUserById(projectLeaderId) : null;
+                calcParam.setProjectUserId(projectLeaderId);
+                calcParam.setProjectUserName(projectLeader != null ? projectLeader.getNickName() : "");
+            }
+        } else {
+            calcParam.setSalesUserId(salesUserId);
+            calcParam.setSalesUserName(salesUser.getNickName());
+            calcParam.setTeamUserId(salesUserId);
+            calcParam.setTeamUserName(salesUser.getNickName());
+            calcParam.setProjectUserId(salesUserId);
+            calcParam.setProjectUserName(salesUser.getNickName());
+        }
     }
 
     private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
