@@ -156,4 +156,9 @@ public class InsuranceTenantProductVo implements Serializable {
      */
     private BigDecimal netPremium;
 
+    /**
+     * 当前登录用户按角色可展示的佣金费率
+     */
+    private BigDecimal displayCommissionRate;
+
 }

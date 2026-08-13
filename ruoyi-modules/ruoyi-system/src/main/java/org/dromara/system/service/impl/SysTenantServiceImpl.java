@@ -643,9 +643,10 @@ public class SysTenantServiceImpl implements ISysTenantService {
                 .eq(SysTenant::getStatus, SystemConstants.NORMAL), x -> {
                 return Convert.toStr(x);
             });
-        // 待入库的字典类型和字典数据
+        // 待新增和更新的参数配置
         List<SysConfig> saveConfigList = new ArrayList<>();
-        // 待同步的租户编号（用于清除对于租户的字典缓存）
+        List<SysConfig> updateConfigList = new ArrayList<>();
+        // 待同步的租户编号（用于清除对应租户的参数缓存）
         Set<String> syncTenantIds = new HashSet<>();
         // 循环所有租户，处理需要同步的数据
         for (String tenantId : tenantIds) {
@@ -653,24 +654,39 @@ public class SysTenantServiceImpl implements ISysTenantService {
             if (TenantConstants.DEFAULT_TENANT_ID.equals(tenantId)) {
                 continue;
             }
-            // 根据默认租户的字典类型进行数据同步
+            Map<String, SysConfig> tenantConfigMap = Optional.ofNullable(configMap.get(tenantId))
+                .orElseGet(Collections::emptyList)
+                .stream()
+                .collect(Collectors.toMap(SysConfig::getConfigKey, config -> config, (left, right) -> left));
+            // 管理员参数为唯一权威源：缺失则新增，已存在则覆盖
             for (SysConfig config : defaultConfigList) {
-                // 获取当前租户的字典类型列表
-                List<String> typeList = StreamUtils.toList(configMap.get(tenantId), SysConfig::getConfigKey);
-                if (!typeList.contains(config.getConfigKey())) {
+                SysConfig tenantConfig = tenantConfigMap.get(config.getConfigKey());
+                if (tenantConfig == null) {
                     SysConfig type = BeanUtil.toBean(config, SysConfig.class);
                     type.setConfigId(null);
                     type.setTenantId(tenantId);
                     type.setCreateTime(null);
                     type.setUpdateTime(null);
-                    syncTenantIds.add(tenantId);
                     saveConfigList.add(type);
+                } else if (!Objects.equals(tenantConfig.getConfigName(), config.getConfigName())
+                    || !Objects.equals(tenantConfig.getConfigValue(), config.getConfigValue())
+                    || !Objects.equals(tenantConfig.getConfigType(), config.getConfigType())
+                    || !Objects.equals(tenantConfig.getRemark(), config.getRemark())) {
+                    tenantConfig.setConfigName(config.getConfigName());
+                    tenantConfig.setConfigValue(config.getConfigValue());
+                    tenantConfig.setConfigType(config.getConfigType());
+                    tenantConfig.setRemark(config.getRemark());
+                    updateConfigList.add(tenantConfig);
                 }
             }
+            syncTenantIds.add(tenantId);
         }
         TenantHelper.ignore(() -> {
             if (CollUtil.isNotEmpty(saveConfigList)) {
                 configMapper.insertBatch(saveConfigList);
+            }
+            if (CollUtil.isNotEmpty(updateConfigList)) {
+                configMapper.updateBatchById(updateConfigList);
             }
         });
         for (String tenantId : syncTenantIds) {

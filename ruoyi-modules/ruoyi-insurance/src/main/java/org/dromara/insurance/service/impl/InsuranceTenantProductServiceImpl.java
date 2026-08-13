@@ -1,6 +1,11 @@
 package org.dromara.insurance.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
+import org.dromara.commission.domain.BizCommissionDept;
+import org.dromara.commission.domain.vo.BizCommissionProductVo;
+import org.dromara.commission.service.IBizCommissionDeptService;
+import org.dromara.commission.service.IBizCommissionProductService;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -15,7 +20,10 @@ import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.insurance.domain.InsuranceProductConfig;
 import org.dromara.insurance.mapper.InsuranceProductConfigMapper;
+import org.dromara.insurance.service.IInsuranceProductCommissionService;
+import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysOssVo;
+import org.dromara.system.service.ISysDeptService;
 import org.dromara.system.service.ISysOssService;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.insurance.domain.bo.ServiceFeeConfig;
@@ -46,6 +54,14 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
     private final InsuranceTenantProductMapper baseMapper;
 
     private final InsuranceProductConfigMapper insuranceProductConfigMapper;
+
+    private final IInsuranceProductCommissionService insuranceProductCommissionService;
+
+    private final IBizCommissionDeptService bizCommissionDeptService;
+
+    private final IBizCommissionProductService bizCommissionProductService;
+
+    private final ISysDeptService sysDeptService;
 
     private final ISysOssService sysOssService;
 
@@ -125,6 +141,9 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
             }
         });
 
+        vo.setDisplayCommissionRate(getDisplayCommissionRateMap(List.of(tp.getProductId()))
+            .getOrDefault(tp.getProductId(), BigDecimal.ZERO));
+
         return vo;
     }
 
@@ -203,6 +222,8 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
             return map;
         });
 
+        Map<Long, BigDecimal> displayCommissionRateMap = getDisplayCommissionRateMap(productIds);
+
         // ================= 5. 数据完美缝合 =================
         List<InsuranceTenantProductVo> voList = page.getRecords().stream().map(tp -> {
             // 先转换本表自带的字段 (id, productId, status, sort 等)
@@ -227,6 +248,7 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setCategoryId(baseInfo.getCategoryId());
                 vo.setCategoryName(baseInfo.getCategoryName());
                 vo.setMarketingTags(baseInfo.getMarketingTags());
+                vo.setDisplayCommissionRate(displayCommissionRateMap.getOrDefault(baseInfo.getId(), BigDecimal.ZERO));
 
                 // 🌟 核心：从刚才缓存的 Map 中拿出真实链接，手动赋给 VO
                 vo.setImgUrl(realOssUrlCache.get(baseInfo.getImgUrl()));
@@ -263,6 +285,68 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
         resultPage.setRecords(voList);
 
         return TableDataInfo.build(resultPage);
+    }
+
+    /**
+     * 按当前登录用户角色计算产品展示佣金，规则与移动端销售产品列表保持一致。
+     */
+    private Map<Long, BigDecimal> getDisplayCommissionRateMap(List<Long> productIds) {
+        Map<Long, BigDecimal> baseRateMap = insuranceProductCommissionService.getBatchRateMap(productIds);
+
+        Long deptId = LoginHelper.getDeptId();
+        Long topLevelDeptId = deptId;
+        SysDeptVo currentDept = sysDeptService.selectDeptById(deptId);
+        if (currentDept != null && StringUtils.isNotBlank(currentDept.getAncestors())) {
+            String[] ids = currentDept.getAncestors().split(",");
+            if (ids.length > 1) {
+                topLevelDeptId = Long.valueOf(ids[1]);
+            }
+        }
+
+        BizCommissionDept commissionDept = bizCommissionDeptService.queryByDeptId(topLevelDeptId);
+        BigDecimal normalBizRatio = commissionDept != null && commissionDept.getSalesRatio() != null
+            ? commissionDept.getSalesRatio() : BigDecimal.ZERO;
+        BigDecimal normalTeamRatio = commissionDept != null && commissionDept.getTeamRatio() != null
+            ? commissionDept.getTeamRatio() : BigDecimal.ZERO;
+        BigDecimal normalLeaderRatio = commissionDept != null && commissionDept.getProjectRatio() != null
+            ? commissionDept.getProjectRatio() : BigDecimal.ZERO;
+
+        Map<Long, BizCommissionProductVo> specialConfigMap = bizCommissionProductService.getBatchSpecialConfigs(productIds);
+        boolean isLeader = StpUtil.hasRole("leader");
+        boolean isTeamLeader = StpUtil.hasRole("teamleader");
+        boolean isBizMan = StpUtil.hasRole("bizman");
+
+        Map<Long, BigDecimal> result = new HashMap<>();
+        for (Long productId : productIds) {
+            BigDecimal baseRate = baseRateMap.getOrDefault(productId, BigDecimal.ZERO);
+            BizCommissionProductVo specialConfig = specialConfigMap.get(productId);
+            BigDecimal bizRatio;
+            BigDecimal teamRatio;
+            BigDecimal leaderRatio;
+            if (specialConfig != null) {
+                bizRatio = specialConfig.getSalesRatio() != null ? specialConfig.getSalesRatio() : BigDecimal.ZERO;
+                teamRatio = specialConfig.getTeamRatio() != null ? specialConfig.getTeamRatio() : BigDecimal.ZERO;
+                leaderRatio = specialConfig.getProjectRatio() != null ? specialConfig.getProjectRatio() : BigDecimal.ZERO;
+            } else {
+                bizRatio = normalBizRatio;
+                teamRatio = normalTeamRatio;
+                leaderRatio = normalLeaderRatio;
+            }
+
+            BigDecimal displayRate = BigDecimal.ZERO;
+            if (isLeader) {
+                displayRate = baseRate.multiply(bizRatio)
+                    .add(baseRate.multiply(teamRatio))
+                    .add(baseRate.multiply(leaderRatio));
+            } else if (isTeamLeader) {
+                displayRate = baseRate.multiply(bizRatio)
+                    .add(baseRate.multiply(teamRatio));
+            } else if (isBizMan) {
+                displayRate = baseRate.multiply(bizRatio);
+            }
+            result.put(productId, displayRate);
+        }
+        return result;
     }
 
     /**

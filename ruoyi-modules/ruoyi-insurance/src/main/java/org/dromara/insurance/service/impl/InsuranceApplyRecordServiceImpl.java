@@ -857,18 +857,28 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     }
 
     private void registerChineseFont(PdfRendererBuilder builder) {
+        URL classpathFontUrl = InsuranceApplyRecordServiceImpl.class.getResource("/fonts/NotoSansSC-Regular.ttf");
+        if (classpathFontUrl != null) {
+            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
+                "VoucherFont", 400, BaseRendererBuilder.FontStyle.NORMAL, true);
+            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
+                "VoucherFont", 700, BaseRendererBuilder.FontStyle.NORMAL, true);
+            log.info("投保凭证 PDF 使用 classpath 字体: /fonts/NotoSansSC-Regular.ttf");
+            return;
+        }
+
         List<String> trueTypeFontPaths = Arrays.asList(
-            "/home/ry-app/backend/fonts/NotoSansSC-Regular.ttf",
-            "/home/ry-app/backend/fonts/SourceHanSansSC-Regular.ttf",
-            "/home/ry-app/backend/fonts/simsun.ttf",
-            "/home/ry-app/backend/fonts/simhei.ttf",
-            "/home/ry-app/backend/fonts/msyh.ttf",
-            "C:/Windows/Fonts/msyh.ttc",
-            "C:/Windows/Fonts/simsun.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+            "/home/ry-app/backend/fonts/NotoSansSC-Regular.ttf"
+//            "/home/ry-app/backend/fonts/SourceHanSansSC-Regular.ttf",
+//            "/home/ry-app/backend/fonts/simsun.ttf",
+//            "/home/ry-app/backend/fonts/simhei.ttf",
+//            "/home/ry-app/backend/fonts/msyh.ttf",
+//            "C:/Windows/Fonts/msyh.ttc",
+//            "C:/Windows/Fonts/simsun.ttc",
+//            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+//            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+//            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+//            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         );
         for (String fontPath : trueTypeFontPaths) {
             File fontFile = new File(fontPath);
@@ -878,16 +888,6 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
                 log.info("投保凭证 PDF 使用字体文件: {}", fontFile.getAbsolutePath());
                 return;
             }
-        }
-
-        URL classpathFontUrl = InsuranceApplyRecordServiceImpl.class.getResource("/fonts/NotoSansSC-Regular.ttf");
-        if (classpathFontUrl != null) {
-            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
-                "VoucherFont", 400, BaseRendererBuilder.FontStyle.NORMAL, true);
-            builder.useFont(() -> InsuranceApplyRecordServiceImpl.class.getResourceAsStream("/fonts/NotoSansSC-Regular.ttf"),
-                "VoucherFont", 700, BaseRendererBuilder.FontStyle.NORMAL, true);
-            log.info("投保凭证 PDF 使用 classpath 字体: /fonts/NotoSansSC-Regular.ttf");
-            return;
         }
 
         log.warn("未找到可用 TrueType 中文字体，投保凭证 PDF 可能出现中文显示异常。请在 /home/ry-app/backend/fonts 放置 NotoSansSC-Regular.ttf 或 SourceHanSansSC-Regular.ttf");
