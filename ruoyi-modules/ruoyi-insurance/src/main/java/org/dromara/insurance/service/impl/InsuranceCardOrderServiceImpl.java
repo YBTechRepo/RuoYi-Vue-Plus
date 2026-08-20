@@ -53,8 +53,8 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
 
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public InsuranceCardOrderVo queryById(Long id) {
         InsuranceCardOrderVo orderVo = baseMapper.selectVoById(id);
@@ -90,8 +90,8 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
 
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public TableDataInfo<InsuranceCardOrderVo> queryPageList(InsuranceCardOrderBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsuranceCardOrder> lqw = buildQueryWrapper(bo);
@@ -101,8 +101,8 @@ public class InsuranceCardOrderServiceImpl implements IInsuranceCardOrderService
 
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public List<InsuranceCardOrderVo> queryList(InsuranceCardOrderBo bo) {
         LambdaQueryWrapper<InsuranceCardOrder> lqw = buildQueryWrapper(bo);

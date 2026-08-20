@@ -6,6 +6,7 @@ import org.dromara.commission.domain.vo.AppCommissionItemVo;
 import org.dromara.commission.domain.vo.CommissionSummaryVo;
 import org.dromara.commission.service.IBizCommissionDeptService;
 import org.dromara.commission.service.IBizCommissionProductService;
+import org.dromara.commission.utils.CommissionCalculationUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -37,7 +38,6 @@ import org.dromara.commission.service.IBizCommissionRecordService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.*;
 
 /**
@@ -217,7 +217,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             log.info("团队佣金比例：{}",specialProduct.getTeamRatio());
             log.info("机构佣金比例：{}",specialProduct.getProjectRatio());
             // 🌟 传入 paymentMode 和 payerUserId (直接从 calcCommission 取即可)
-            calculateAndSaveRecord(calcCommission, totalCommission,
+            calculateAndSaveRecord(calcCommission, totalCommission, productBase.getCommissionRate(),
                 specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
             return;
         }
@@ -241,7 +241,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             log.info("业务员佣金比例：{}",deptCommission.getSalesRatio());
             log.info("团队佣金比例：{}",deptCommission.getTeamRatio());
             log.info("机构佣金比例：{}",deptCommission.getProjectRatio());
-            calculateAndSaveRecord(calcCommission, totalCommission,
+            calculateAndSaveRecord(calcCommission, totalCommission, productBase.getCommissionRate(),
                 deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
             return;
         }
@@ -457,12 +457,16 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
     }
 
     private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
-                                        BigDecimal sRatio, BigDecimal tRatio, BigDecimal pRatio, Integer strategy) {
+                                        BigDecimal baseRate, BigDecimal sRatio, BigDecimal tRatio,
+                                        BigDecimal pRatio, Integer strategy) {
 
-        // 🌟 1. 核心计算：全部使用乘法并四舍五入保留2位小数
-        BigDecimal salesCommission = totalCommission.multiply(sRatio != null ? sRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal teamCommission = totalCommission.multiply(tRatio != null ? tRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal projectCommission = totalCommission.multiply(pRatio != null ? pRatio : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        // 🌟 1. 各角色有效费率先向下取整到整数百分比，佣金金额再四舍五入保留2位小数
+        BigDecimal salesCommission = CommissionCalculationUtils.calculateCommissionAmount(
+            calcCommission.getPolicyPremium(), baseRate, sRatio);
+        BigDecimal teamCommission = CommissionCalculationUtils.calculateCommissionAmount(
+            calcCommission.getPolicyPremium(), baseRate, tRatio);
+        BigDecimal projectCommission = CommissionCalculationUtils.calculateCommissionAmount(
+            calcCommission.getPolicyPremium(), baseRate, pRatio);
         log.info("保单号："+calcCommission.getPolicyNo()+"，业务员佣金："+salesCommission);
         log.info("保单号："+calcCommission.getPolicyNo()+"，团队佣金："+teamCommission);
         log.info("保单号："+calcCommission.getPolicyNo()+"，机构佣金："+projectCommission);

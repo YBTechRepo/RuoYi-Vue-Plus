@@ -6,7 +6,6 @@ import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.constant.TenantConstants;
@@ -23,15 +22,20 @@ import org.dromara.system.domain.SysRoleTemplate;
 import org.dromara.system.domain.SysTenant;
 import org.dromara.system.domain.SysTenantPackage;
 import org.dromara.system.domain.bo.SysTenantPackageBo;
+import org.dromara.system.domain.dto.RoleTemplateDto;
 import org.dromara.system.domain.vo.SysTenantPackageVo;
 import org.dromara.system.mapper.SysRoleMapper;
 import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysRoleTemplateMapper;
 import org.dromara.system.mapper.SysTenantMapper;
 import org.dromara.system.mapper.SysTenantPackageMapper;
+import org.dromara.system.mapper.SysUserRoleMapper;
+import org.dromara.system.service.ISysRoleService;
 import org.dromara.system.service.ISysTenantPackageService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -50,14 +54,8 @@ public class SysTenantPackageServiceImpl implements ISysTenantPackageService {
     private final SysRoleTemplateMapper roleTemplateMapper;
     private final SysRoleMapper roleMapper;
     private final SysRoleMenuMapper roleMenuMapper;
-
-    @Data
-    private static class RoleTemplateDTO {
-        private String roleName;
-        private String roleKey;
-        private List<Long> menuIds;
-        private Integer sort;
-    }
+    private final SysUserRoleMapper userRoleMapper;
+    private final ISysRoleService roleService;
 
     /**
      * 查询租户套餐
@@ -178,7 +176,8 @@ public class SysTenantPackageServiceImpl implements ISysTenantPackageService {
             List<SysRoleTemplate> templates = roleTemplateMapper.selectList(new LambdaQueryWrapper<SysRoleTemplate>()
                 .eq(SysRoleTemplate::getTenantPackageId, packageId)
                 .eq(SysRoleTemplate::getStatus, SystemConstants.NORMAL));
-            Map<Long, List<RoleTemplateDTO>> templateRoleMap = buildTemplateRoleMap(templates);
+            Map<Long, List<RoleTemplateDto>> templateRoleMap = buildTemplateRoleMap(templates);
+            Set<Long> changedRoleIds = new HashSet<>();
 
             for (SysTenant tenant : tenants) {
                 List<SysRole> roles = roleMapper.selectList(new LambdaQueryWrapper<SysRole>()
@@ -195,13 +194,23 @@ public class SysTenantPackageServiceImpl implements ISysTenantPackageService {
                     appendRoleMenus(adminRole.getRoleId(), packageMenuIds);
                 }
 
-                List<RoleTemplateDTO> templateRoles = resolveTemplateRoles(tenant, templates, templateRoleMap);
+                List<RoleTemplateDto> templateRoles = resolveTemplateRoles(tenant, templates, templateRoleMap);
                 if (CollUtil.isEmpty(templateRoles)) {
                     continue;
                 }
-                for (RoleTemplateDTO templateRole : templateRoles) {
+                for (RoleTemplateDto templateRole : templateRoles) {
                     SysRole role = roleMap.get(templateRole.getRoleKey());
-                    if (role == null || CollUtil.isEmpty(templateRole.getMenuIds())) {
+                    if (role == null) {
+                        continue;
+                    }
+                    String dataScope = templateRole.resolveDataScope();
+                    if (!Objects.equals(role.getDataScope(), dataScope)) {
+                        SysRole update = new SysRole(role.getRoleId());
+                        update.setDataScope(dataScope);
+                        roleMapper.updateById(update);
+                        changedRoleIds.add(role.getRoleId());
+                    }
+                    if (CollUtil.isEmpty(templateRole.getMenuIds())) {
                         continue;
                     }
                     Set<Long> safeMenuIds = templateRole.getMenuIds().stream()
@@ -210,27 +219,28 @@ public class SysTenantPackageServiceImpl implements ISysTenantPackageService {
                     appendRoleMenus(role.getRoleId(), safeMenuIds);
                 }
             }
+            cleanChangedRoleUsersAfterCommit(changedRoleIds);
             return true;
         });
     }
 
-    private Map<Long, List<RoleTemplateDTO>> buildTemplateRoleMap(List<SysRoleTemplate> templates) {
+    private Map<Long, List<RoleTemplateDto>> buildTemplateRoleMap(List<SysRoleTemplate> templates) {
         if (CollUtil.isEmpty(templates)) {
             return Collections.emptyMap();
         }
-        Map<Long, List<RoleTemplateDTO>> templateRoleMap = new HashMap<>(templates.size());
+        Map<Long, List<RoleTemplateDto>> templateRoleMap = new HashMap<>(templates.size());
         for (SysRoleTemplate template : templates) {
             if (StringUtils.isBlank(template.getRolesJson())) {
                 templateRoleMap.put(template.getId(), Collections.emptyList());
                 continue;
             }
-            List<RoleTemplateDTO> templateRoles = JsonUtils.parseArray(template.getRolesJson(), RoleTemplateDTO.class);
+            List<RoleTemplateDto> templateRoles = JsonUtils.parseArray(template.getRolesJson(), RoleTemplateDto.class);
             templateRoleMap.put(template.getId(), templateRoles);
         }
         return templateRoleMap;
     }
 
-    private List<RoleTemplateDTO> resolveTemplateRoles(SysTenant tenant, List<SysRoleTemplate> templates, Map<Long, List<RoleTemplateDTO>> templateRoleMap) {
+    private List<RoleTemplateDto> resolveTemplateRoles(SysTenant tenant, List<SysRoleTemplate> templates, Map<Long, List<RoleTemplateDto>> templateRoleMap) {
         Long roleTemplateId = tenant.getRoleTemplateId();
         if (ObjectUtil.isNotNull(roleTemplateId)) {
             return templateRoleMap.getOrDefault(roleTemplateId, Collections.emptyList());
@@ -239,6 +249,26 @@ public class SysTenantPackageServiceImpl implements ISysTenantPackageService {
             return templateRoleMap.getOrDefault(templates.get(0).getId(), Collections.emptyList());
         }
         return Collections.emptyList();
+    }
+
+    void cleanChangedRoleUsersAfterCommit(Set<Long> changedRoleIds) {
+        if (CollUtil.isEmpty(changedRoleIds)) {
+            return;
+        }
+        List<Long> userIds = userRoleMapper.selectUserIdsByRoleIds(changedRoleIds);
+        if (CollUtil.isEmpty(userIds)) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    roleService.cleanOnlineUser(userIds);
+                }
+            });
+        } else {
+            roleService.cleanOnlineUser(userIds);
+        }
     }
 
     private void prunePackageOutsideMenus(List<SysRole> roles, Set<Long> packageMenuIds) {

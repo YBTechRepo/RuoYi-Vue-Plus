@@ -9,7 +9,6 @@ import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.constant.Constants;
@@ -29,6 +28,7 @@ import org.dromara.common.tenant.core.TenantEntity;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.system.domain.*;
 import org.dromara.system.domain.bo.SysTenantBo;
+import org.dromara.system.domain.dto.RoleTemplateDto;
 import org.dromara.system.domain.vo.SysTenantVo;
 import org.dromara.system.mapper.*;
 import org.dromara.system.service.ISysTenantService;
@@ -61,14 +61,6 @@ public class SysTenantServiceImpl implements ISysTenantService {
     private final SysDictDataMapper dictDataMapper;
     private final SysConfigMapper configMapper;
     private final SysRoleTemplateMapper roleTemplateMapper;
-
-    @Data
-    public static class RoleTemplateDTO {
-        private String roleName;
-        private String roleKey;
-        private List<Long> menuIds;
-        private Integer sort;
-    }
 
     /**
      * 查询租户
@@ -316,6 +308,7 @@ public class SysTenantServiceImpl implements ISysTenantService {
         adminRole.setRoleName(TenantConstants.TENANT_ADMIN_ROLE_NAME);
         adminRole.setRoleKey(TenantConstants.TENANT_ADMIN_ROLE_KEY);
         adminRole.setRoleSort(1);
+        adminRole.setDataScope("1");
         adminRole.setStatus(SystemConstants.NORMAL);
         roleMapper.insert(adminRole);
         Long adminRoleId = adminRole.getRoleId();
@@ -328,14 +321,15 @@ public class SysTenantServiceImpl implements ISysTenantService {
         if (templateId != null) {
             SysRoleTemplate template = roleTemplateMapper.selectById(templateId);
             if (template != null && StringUtils.isNotBlank(template.getRolesJson())) {
-                List<RoleTemplateDTO> tplRoles = JsonUtils.parseArray(template.getRolesJson(), RoleTemplateDTO.class);
+                List<RoleTemplateDto> tplRoles = JsonUtils.parseArray(template.getRolesJson(), RoleTemplateDto.class);
                 if (CollUtil.isNotEmpty(tplRoles)) {
-                    for (RoleTemplateDTO tpl : tplRoles) {
+                    for (RoleTemplateDto tpl : tplRoles) {
                         SysRole subRole = new SysRole();
                         subRole.setTenantId(tenantId);
                         subRole.setRoleName(tpl.getRoleName());
                         subRole.setRoleKey(tpl.getRoleKey());
                         subRole.setRoleSort(tpl.getSort() != null ? tpl.getSort() : 2);
+                        subRole.setDataScope(tpl.resolveDataScope());
                         subRole.setStatus(SystemConstants.NORMAL);
                         roleMapper.insert(subRole);
                         roleIdMap.put(subRole.getRoleKey(), subRole.getRoleId());

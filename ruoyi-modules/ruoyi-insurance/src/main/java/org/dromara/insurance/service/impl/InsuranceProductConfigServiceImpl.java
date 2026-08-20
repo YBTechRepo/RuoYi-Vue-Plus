@@ -7,6 +7,7 @@ import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.vo.BizCommissionProductVo;
 import org.dromara.commission.service.IBizCommissionDeptService;
 import org.dromara.commission.service.IBizCommissionProductService;
+import org.dromara.commission.utils.CommissionCalculationUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -423,18 +424,18 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                 currentLeaderRatio = normalLeaderRatio;
             }
 
+            BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
+            BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
+            BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
             var finalDisplayRate = BigDecimal.ZERO;
 
             // 核心计算：级差累加公式
             if (isLeader) {
-                finalDisplayRate = baseRate.multiply(currentBizRatio)
-                    .add(baseRate.multiply(currentTeamRatio))
-                    .add(baseRate.multiply(currentLeaderRatio));
+                finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
             } else if (isTeamLeader) {
-                finalDisplayRate = baseRate.multiply(currentBizRatio)
-                    .add(baseRate.multiply(currentTeamRatio));
+                finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate);
             } else if (isBizMan) {
-                finalDisplayRate = baseRate.multiply(currentBizRatio);
+                finalDisplayRate = bizEffectiveRate;
             }
 
             vo.setDisplayCommissionRate(finalDisplayRate);
@@ -525,16 +526,16 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             currentLeaderRatio = normalLeaderRatio;
         }
 
+        BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
+        BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
+        BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
         var finalDisplayRate = BigDecimal.ZERO;
         if (isLeader) {
-            finalDisplayRate = baseRate.multiply(currentBizRatio)
-                .add(baseRate.multiply(currentTeamRatio))
-                .add(baseRate.multiply(currentLeaderRatio));
+            finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
         } else if (isTeamLeader) {
-            finalDisplayRate = baseRate.multiply(currentBizRatio)
-                .add(baseRate.multiply(currentTeamRatio));
+            finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate);
         } else if (isBizMan) {
-            finalDisplayRate = baseRate.multiply(currentBizRatio);
+            finalDisplayRate = bizEffectiveRate;
         }
 
         vo.setDisplayCommissionRate(finalDisplayRate);

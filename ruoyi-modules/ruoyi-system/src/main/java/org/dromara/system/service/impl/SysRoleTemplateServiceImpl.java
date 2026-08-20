@@ -1,7 +1,10 @@
 package org.dromara.system.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
+
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -11,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.dromara.system.domain.bo.SysRoleTemplateBo;
+import org.dromara.system.domain.dto.RoleTemplateDto;
 import org.dromara.system.domain.vo.SysRoleTemplateVo;
 import org.dromara.system.domain.SysRoleTemplate;
 import org.dromara.system.mapper.SysRoleTemplateMapper;
@@ -113,7 +117,15 @@ public class SysRoleTemplateServiceImpl implements ISysRoleTemplateService {
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(SysRoleTemplate entity){
-        //TODO 做一些数据校验,如唯一约束
+        if (StringUtils.isBlank(entity.getRolesJson())) {
+            return;
+        }
+        List<RoleTemplateDto> roles = JsonUtils.parseArray(entity.getRolesJson(), RoleTemplateDto.class);
+        if (CollUtil.isEmpty(roles)) {
+            return;
+        }
+        roles.forEach(role -> role.setDataScope(role.resolveDataScope()));
+        entity.setRolesJson(JsonUtils.toJsonString(roles));
     }
 
     /**

@@ -6,6 +6,7 @@ import org.dromara.commission.domain.BizCommissionDept;
 import org.dromara.commission.domain.vo.BizCommissionProductVo;
 import org.dromara.commission.service.IBizCommissionDeptService;
 import org.dromara.commission.service.IBizCommissionProductService;
+import org.dromara.commission.utils.CommissionCalculationUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -333,16 +334,16 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 leaderRatio = normalLeaderRatio;
             }
 
+            BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, bizRatio);
+            BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, teamRatio);
+            BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, leaderRatio);
             BigDecimal displayRate = BigDecimal.ZERO;
             if (isLeader) {
-                displayRate = baseRate.multiply(bizRatio)
-                    .add(baseRate.multiply(teamRatio))
-                    .add(baseRate.multiply(leaderRatio));
+                displayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
             } else if (isTeamLeader) {
-                displayRate = baseRate.multiply(bizRatio)
-                    .add(baseRate.multiply(teamRatio));
+                displayRate = bizEffectiveRate.add(teamEffectiveRate);
             } else if (isBizMan) {
-                displayRate = baseRate.multiply(bizRatio);
+                displayRate = bizEffectiveRate;
             }
             result.put(productId, displayRate);
         }

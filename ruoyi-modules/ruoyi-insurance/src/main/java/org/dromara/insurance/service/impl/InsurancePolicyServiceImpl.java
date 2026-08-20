@@ -44,8 +44,8 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public InsurancePolicyVo queryById(Long id){
         return baseMapper.selectVoById(id);
@@ -71,8 +71,8 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public TableDataInfo<InsurancePolicyVo> queryPageList(InsurancePolicyBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsurancePolicy> lqw = buildQueryWrapper(bo);
@@ -101,8 +101,8 @@ public class InsurancePolicyServiceImpl implements IInsurancePolicyService {
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public List<InsurancePolicyVo> queryList(InsurancePolicyBo bo) {
         LambdaQueryWrapper<InsurancePolicy> lqw = buildQueryWrapper(bo);

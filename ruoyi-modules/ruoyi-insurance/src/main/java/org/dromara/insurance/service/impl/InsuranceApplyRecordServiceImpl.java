@@ -15,6 +15,7 @@ import org.dromara.commission.domain.BizCommissionProduct;
 import org.dromara.commission.event.PolicyUnderwrittenEvent;
 import org.dromara.commission.mapper.BizCommissionProductMapper;
 import org.dromara.commission.service.IBizCommissionDeptService;
+import org.dromara.commission.utils.CommissionCalculationUtils;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -120,8 +121,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public InsuranceApplyRecordVo queryById(Long id){
         return baseMapper.selectVoById(id);
@@ -136,8 +137,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public TableDataInfo<InsuranceApplyRecordVo> queryPageList(InsuranceApplyRecordBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
@@ -153,8 +154,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      */
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public List<InsuranceApplyRecordVo> queryList(InsuranceApplyRecordBo bo) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
@@ -175,8 +176,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public void exportList(InsuranceApplyRecordBo bo, HttpServletResponse response) {
         List<InsuranceApplyRecordVo> list = queryList(bo);
@@ -551,8 +552,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
     @Override
     @DataPermission({
-        @DataColumn(key = "deptName", value = "create_dept"),
-        @DataColumn(key = "userName", value = "create_by")
+        @DataColumn(key = "deptName", value = "agent_dept_id"),
+        @DataColumn(key = "userName", value = "agent_user_id")
     })
     public VoucherPdfResult generateVoucherPdfByPolicyNo(String policyNo) {
         if (StringUtils.isBlank(policyNo)) {
@@ -1394,19 +1395,19 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         boolean isLeader = StpUtil.hasRole("leader");         // 顶级项目总监
         boolean isTeamLeader = StpUtil.hasRole("teamleader"); // 团队长
         boolean isBizMan = StpUtil.hasRole("bizman");         // 基层业务员
+        BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
+        BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
+        BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
 
         if (isLeader) {
             // 总监：拿自己作为业务员的钱 + 团队长的钱 + 总监的钱
-            finalRate = baseRate.multiply(currentBizRatio)
-                .add(baseRate.multiply(currentTeamRatio))
-                .add(baseRate.multiply(currentLeaderRatio));
+            finalRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
         } else if (isTeamLeader) {
             // 团队长：拿自己作为业务员的钱 + 团队长的钱
-            finalRate = baseRate.multiply(currentBizRatio)
-                .add(baseRate.multiply(currentTeamRatio));
+            finalRate = bizEffectiveRate.add(teamEffectiveRate);
         } else if (isBizMan) {
             // 基层业务员：只拿业务员的钱
-            finalRate = baseRate.multiply(currentBizRatio);
+            finalRate = bizEffectiveRate;
         }
 
         return finalRate;
