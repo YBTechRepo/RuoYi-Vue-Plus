@@ -22,10 +22,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.insurance.domain.InsuranceProductDetail;
+import org.dromara.insurance.domain.InsuranceProductChannelMapping;
 import org.dromara.insurance.domain.InsuranceProductLiability;
 import org.dromara.insurance.domain.InsuranceProductCommission;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
 import org.dromara.insurance.domain.bo.InsuranceProductLiabilityBo;
+import org.dromara.insurance.domain.bo.InsuranceProductChannelMappingBo;
 import org.dromara.insurance.domain.bo.InsuranceProductCommissionBo;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.bo.ProductCommissionConfig;
@@ -33,6 +35,7 @@ import org.dromara.insurance.domain.bo.ServiceFeeConfig;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.domain.vo.MarketProductVo;
 import org.dromara.insurance.mapper.InsuranceProductDetailMapper;
+import org.dromara.insurance.mapper.InsuranceProductChannelMappingMapper;
 import org.dromara.insurance.mapper.InsuranceProductLiabilityMapper;
 import org.dromara.insurance.mapper.InsuranceProductCommissionMapper;
 import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
@@ -45,6 +48,7 @@ import org.dromara.system.mapper.SysTenantMapper;
 import org.dromara.system.service.ISysDeptService;
 import org.dromara.system.service.ISysOssService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.dromara.insurance.domain.bo.InsuranceProductConfigBo;
 import org.dromara.insurance.domain.vo.InsuranceProductConfigVo;
 import org.dromara.insurance.domain.InsuranceProductConfig;
@@ -75,6 +79,8 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
     private final SysTenantMapper sysTenantMapper;
 
     private final InsuranceProductDetailMapper detailMapper;
+
+    private final InsuranceProductChannelMappingMapper productChannelMappingMapper;
 
     private final InsuranceProductLiabilityMapper liabilityMapper;
 
@@ -200,11 +206,20 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
      * @return 是否删除成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
         if(isValid){
             //TODO 做一些业务上的校验,判断是否需要校验
         }
-        return baseMapper.deleteByIds(ids) > 0;
+        boolean deleted = baseMapper.deleteByIds(ids) > 0;
+        if (deleted) {
+            TenantHelper.dynamic("000000", () -> {
+                productChannelMappingMapper.delete(new LambdaQueryWrapper<InsuranceProductChannelMapping>()
+                    .in(InsuranceProductChannelMapping::getProductId, ids));
+                return null;
+            });
+        }
+        return deleted;
     }
 
     @Override
@@ -424,18 +439,17 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                 currentLeaderRatio = normalLeaderRatio;
             }
 
-            BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
-            BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
-            BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
+            CommissionCalculationUtils.RoleRateResult roleRates = CommissionCalculationUtils.calculateRoleRates(
+                baseRate, currentBizRatio, currentTeamRatio, currentLeaderRatio);
             var finalDisplayRate = BigDecimal.ZERO;
 
             // 核心计算：级差累加公式
             if (isLeader) {
-                finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
+                finalDisplayRate = roleRates.projectDisplayRate();
             } else if (isTeamLeader) {
-                finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate);
+                finalDisplayRate = roleRates.teamDisplayRate();
             } else if (isBizMan) {
-                finalDisplayRate = bizEffectiveRate;
+                finalDisplayRate = roleRates.salesDisplayRate();
             }
 
             vo.setDisplayCommissionRate(finalDisplayRate);
@@ -526,16 +540,15 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             currentLeaderRatio = normalLeaderRatio;
         }
 
-        BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
-        BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
-        BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
+        CommissionCalculationUtils.RoleRateResult roleRates = CommissionCalculationUtils.calculateRoleRates(
+            baseRate, currentBizRatio, currentTeamRatio, currentLeaderRatio);
         var finalDisplayRate = BigDecimal.ZERO;
         if (isLeader) {
-            finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
+            finalDisplayRate = roleRates.projectDisplayRate();
         } else if (isTeamLeader) {
-            finalDisplayRate = bizEffectiveRate.add(teamEffectiveRate);
+            finalDisplayRate = roleRates.teamDisplayRate();
         } else if (isBizMan) {
-            finalDisplayRate = bizEffectiveRate;
+            finalDisplayRate = roleRates.salesDisplayRate();
         }
 
         vo.setDisplayCommissionRate(finalDisplayRate);
@@ -596,6 +609,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void saveFullProduct(InsuranceProductSaveBo formBo) {
         // 🌟 变动点 1：从嵌套的 product 对象中获取主表数据
         InsuranceProductConfigBo productBo = formBo.getProduct();
@@ -655,6 +669,11 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         // 拿到最新生成的主键 ID
         Long productId = mainProduct.getId();
 
+        TenantHelper.dynamic("000000", () -> {
+            replaceChannelProductMappings(productId, formBo.getChannelProductMappings());
+            return null;
+        });
+
         // 2. 处理保障责任表 (1对N) - 策略：先删后插 (最简单稳妥)
         liabilityMapper.delete(new LambdaQueryWrapper<InsuranceProductLiability>()
             .eq(InsuranceProductLiability::getProductId, productId));
@@ -684,6 +703,104 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
             detail.setId(existDetail.getId());
             detailMapper.updateById(detail);
         }
+    }
+
+    private void replaceChannelProductMappings(Long productId, List<InsuranceProductChannelMappingBo> mappingBos) {
+        if (mappingBos == null) {
+            return;
+        }
+        List<InsuranceProductChannelMappingBo> normalizedMappings = normalizeChannelMappings(mappingBos);
+
+        if (CollUtil.isNotEmpty(normalizedMappings)) {
+            Set<String> companyTypes = normalizedMappings.stream()
+                .map(InsuranceProductChannelMappingBo::getCompanyType)
+                .collect(Collectors.toSet());
+            Set<String> sourceProductCodes = normalizedMappings.stream()
+                .map(InsuranceProductChannelMappingBo::getSourceProductCode)
+                .collect(Collectors.toSet());
+
+            List<InsuranceProductChannelMapping> occupiedMappings = productChannelMappingMapper.selectList(
+                new LambdaQueryWrapper<InsuranceProductChannelMapping>()
+                    .in(InsuranceProductChannelMapping::getCompanyType, companyTypes)
+                    .in(InsuranceProductChannelMapping::getSourceProductCode, sourceProductCodes)
+            );
+            Map<String, InsuranceProductChannelMapping> occupiedMappingMap = occupiedMappings.stream()
+                .collect(Collectors.toMap(
+                    item -> buildChannelMappingKey(item.getCompanyType(), item.getSourceProductCode()),
+                    item -> item,
+                    (first, second) -> first
+                ));
+
+            for (InsuranceProductChannelMappingBo mappingBo : normalizedMappings) {
+                InsuranceProductChannelMapping occupied = occupiedMappingMap.get(
+                    buildChannelMappingKey(mappingBo.getCompanyType(), mappingBo.getSourceProductCode()));
+                if (occupied != null && !Objects.equals(occupied.getProductId(), productId)) {
+                    throw new ServiceException("渠道产品编码已被其他产品占用："
+                        + mappingBo.getCompanyType() + "/" + mappingBo.getSourceProductCode());
+                }
+            }
+
+            List<InsuranceProductConfig> directProducts = baseMapper.selectList(
+                new LambdaQueryWrapper<InsuranceProductConfig>()
+                    .in(InsuranceProductConfig::getProductCode, sourceProductCodes)
+            );
+            for (InsuranceProductConfig directProduct : directProducts) {
+                if (!Objects.equals(directProduct.getId(), productId)) {
+                    throw new ServiceException("渠道产品编码与其他平台正式产品编码冲突：" + directProduct.getProductCode());
+                }
+            }
+        }
+
+        productChannelMappingMapper.delete(new LambdaQueryWrapper<InsuranceProductChannelMapping>()
+            .eq(InsuranceProductChannelMapping::getProductId, productId));
+
+        if (CollUtil.isEmpty(normalizedMappings)) {
+            return;
+        }
+
+        List<InsuranceProductChannelMapping> mappings = normalizedMappings.stream().map(mappingBo -> {
+            InsuranceProductChannelMapping mapping = BeanUtil.copyProperties(mappingBo, InsuranceProductChannelMapping.class);
+            mapping.setId(null);
+            mapping.setProductId(productId);
+            mapping.setTenantId("000000");
+            return mapping;
+        }).toList();
+        productChannelMappingMapper.insertBatch(mappings);
+    }
+
+    private List<InsuranceProductChannelMappingBo> normalizeChannelMappings(
+        List<InsuranceProductChannelMappingBo> mappingBos) {
+        if (CollUtil.isEmpty(mappingBos)) {
+            return Collections.emptyList();
+        }
+
+        Set<String> uniqueKeys = new HashSet<>();
+        List<InsuranceProductChannelMappingBo> normalizedMappings = new ArrayList<>();
+        for (InsuranceProductChannelMappingBo mappingBo : mappingBos) {
+            if (mappingBo == null || StringUtils.isBlank(mappingBo.getCompanyType())
+                || StringUtils.isBlank(mappingBo.getSourceProductCode())) {
+                throw new ServiceException("渠道类型和渠道产品编码不能为空");
+            }
+
+            InsuranceProductChannelMappingBo normalized = new InsuranceProductChannelMappingBo();
+            normalized.setCompanyType(mappingBo.getCompanyType().trim());
+            normalized.setSourceProductCode(mappingBo.getSourceProductCode().trim());
+            normalized.setSourceProductName(StringUtils.isBlank(mappingBo.getSourceProductName())
+                ? null : mappingBo.getSourceProductName().trim());
+
+            String key = buildChannelMappingKey(normalized.getCompanyType(), normalized.getSourceProductCode());
+            if (!uniqueKeys.add(key)) {
+                throw new ServiceException("渠道产品编码重复："
+                    + normalized.getCompanyType() + "/" + normalized.getSourceProductCode());
+            }
+            normalizedMappings.add(normalized);
+        }
+        return normalizedMappings;
+    }
+
+    private String buildChannelMappingKey(String companyType, String sourceProductCode) {
+        return companyType.trim().toLowerCase(Locale.ROOT) + "\u0000"
+            + sourceProductCode.trim().toLowerCase(Locale.ROOT);
     }
 
     private void validateCardSpecs(InsuranceProductSaveBo formBo) {
@@ -746,6 +863,14 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
                     .orderByAsc(InsuranceProductLiability::getSort)
             );
             resultBo.setLiabilityList(BeanUtil.copyToList(liabilities, InsuranceProductLiabilityBo.class));
+
+            List<InsuranceProductChannelMapping> channelMappings = productChannelMappingMapper.selectList(
+                new LambdaQueryWrapper<InsuranceProductChannelMapping>()
+                    .eq(InsuranceProductChannelMapping::getProductId, id)
+                    .orderByAsc(InsuranceProductChannelMapping::getCompanyType)
+                    .orderByAsc(InsuranceProductChannelMapping::getSourceProductCode)
+            );
+            resultBo.setChannelProductMappings(BeanUtil.copyToList(channelMappings, InsuranceProductChannelMappingBo.class));
 
             // 3. 查详情表
             InsuranceProductDetail detail = detailMapper.selectOne(

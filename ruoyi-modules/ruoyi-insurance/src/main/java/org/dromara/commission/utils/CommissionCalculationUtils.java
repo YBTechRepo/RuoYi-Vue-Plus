@@ -35,7 +35,68 @@ public final class CommissionCalculationUtils {
         if (premium == null) {
             return BigDecimal.ZERO;
         }
-        return premium.multiply(calculateEffectiveRate(baseRate, roleRatio))
-            .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        return calculateAmount(premium, calculateEffectiveRate(baseRate, roleRatio));
+    }
+
+    /**
+     * 计算三层角色有效费率，费率尾差统一归项目负责人。
+     */
+    public static RoleRateResult calculateRoleRates(BigDecimal baseRate, BigDecimal salesRatio,
+                                                    BigDecimal teamRatio, BigDecimal projectRatio) {
+        BigDecimal normalizedSalesRatio = defaultZero(salesRatio);
+        BigDecimal normalizedTeamRatio = defaultZero(teamRatio);
+        BigDecimal normalizedProjectRatio = defaultZero(projectRatio);
+
+        BigDecimal salesRate = calculateEffectiveRate(baseRate, normalizedSalesRatio);
+        BigDecimal teamRate = calculateEffectiveRate(baseRate, normalizedTeamRatio);
+        BigDecimal totalRate = calculateEffectiveRate(baseRate,
+            normalizedSalesRatio.add(normalizedTeamRatio).add(normalizedProjectRatio));
+        BigDecimal projectRate = totalRate.subtract(salesRate).subtract(teamRate);
+
+        return new RoleRateResult(salesRate, teamRate, projectRate, totalRate);
+    }
+
+    /**
+     * 按三层角色有效费率计算佣金金额，金额尾差统一归项目负责人。
+     */
+    public static RoleAmountResult calculateRoleAmounts(BigDecimal premium, RoleRateResult rateResult) {
+        if (premium == null || rateResult == null) {
+            return new RoleAmountResult(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        BigDecimal totalAmount = calculateAmount(premium, rateResult.totalRate());
+        BigDecimal salesAmount = calculateAmount(premium, rateResult.salesRate());
+        BigDecimal teamAmount = calculateAmount(premium, rateResult.teamRate());
+        BigDecimal projectAmount = totalAmount.subtract(salesAmount).subtract(teamAmount);
+
+        return new RoleAmountResult(salesAmount, teamAmount, projectAmount, totalAmount);
+    }
+
+    private static BigDecimal calculateAmount(BigDecimal premium, BigDecimal effectiveRate) {
+        return premium.multiply(effectiveRate).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    public record RoleRateResult(BigDecimal salesRate, BigDecimal teamRate,
+                                 BigDecimal projectRate, BigDecimal totalRate) {
+
+        public BigDecimal salesDisplayRate() {
+            return salesRate;
+        }
+
+        public BigDecimal teamDisplayRate() {
+            return salesRate.add(teamRate);
+        }
+
+        public BigDecimal projectDisplayRate() {
+            return totalRate;
+        }
+    }
+
+    public record RoleAmountResult(BigDecimal salesAmount, BigDecimal teamAmount,
+                                   BigDecimal projectAmount, BigDecimal totalAmount) {
     }
 }

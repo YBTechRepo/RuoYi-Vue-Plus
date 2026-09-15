@@ -334,16 +334,15 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 leaderRatio = normalLeaderRatio;
             }
 
-            BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, bizRatio);
-            BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, teamRatio);
-            BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, leaderRatio);
+            CommissionCalculationUtils.RoleRateResult roleRates = CommissionCalculationUtils.calculateRoleRates(
+                baseRate, bizRatio, teamRatio, leaderRatio);
             BigDecimal displayRate = BigDecimal.ZERO;
             if (isLeader) {
-                displayRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
+                displayRate = roleRates.projectDisplayRate();
             } else if (isTeamLeader) {
-                displayRate = bizEffectiveRate.add(teamEffectiveRate);
+                displayRate = roleRates.teamDisplayRate();
             } else if (isBizMan) {
-                displayRate = bizEffectiveRate;
+                displayRate = roleRates.salesDisplayRate();
             }
             result.put(productId, displayRate);
         }

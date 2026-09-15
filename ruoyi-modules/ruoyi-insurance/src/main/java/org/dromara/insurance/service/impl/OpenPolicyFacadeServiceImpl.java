@@ -7,18 +7,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.commission.domain.CalcCommission;
 import org.dromara.commission.event.PolicyUnderwrittenEvent;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.tenant.helper.TenantHelper;
+import org.dromara.insurance.domain.InsuranceApplyRecord;
 import org.dromara.insurance.domain.InsurancePolicy;
 import org.dromara.insurance.domain.InsuranceProductConfig;
+import org.dromara.insurance.domain.InsuranceProductChannelMapping;
 import org.dromara.insurance.domain.InsuranceTenantProduct;
 import org.dromara.insurance.domain.ResultModel;
 import org.dromara.insurance.domain.bo.InsurancePolicyBo;
 import org.dromara.insurance.domain.dto.PolicyCallbackDto;
 import org.dromara.insurance.domain.dto.PolicyDto;
+import org.dromara.insurance.mapper.InsuranceApplyRecordMapper;
 import org.dromara.insurance.mapper.InsuranceProductConfigMapper;
+import org.dromara.insurance.mapper.InsuranceProductChannelMappingMapper;
 import org.dromara.insurance.mapper.InsuranceTenantProductMapper;
 import org.dromara.insurance.service.IInsurancePolicyService;
-import org.dromara.insurance.service.IInsuranceProductConfigService;
 import org.dromara.insurance.service.IOpenPolicyFacadeService;
 import org.dromara.system.domain.vo.SysDeptVo;
 import org.dromara.system.domain.vo.SysUserVo;
@@ -29,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -37,11 +42,13 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
 
     private final IInsurancePolicyService insurancePolicyService;
 
-    private final IInsuranceProductConfigService insuranceProductConfigService;
-
     private final InsuranceProductConfigMapper insuranceProductConfigMapper;
 
+    private final InsuranceProductChannelMappingMapper productChannelMappingMapper;
+
     private final InsuranceTenantProductMapper insuranceTenantProductMapper;
+
+    private final InsuranceApplyRecordMapper insuranceApplyRecordMapper;
 
     private final ISysUserService sysUserService;
 
@@ -57,6 +64,11 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             throw new ServiceException("保单数据为空，无法处理回调");
         }
         PolicyDto policyDto = policyCallbackDto.getPolicy();
+        String policyNo = requireCallbackValue(policyDto.getPolicyNo(), "保单号不能为空");
+        String orderNo = requireCallbackValue(policyDto.getOrderNo(), "订单号不能为空");
+        BigDecimal premium = parsePremium(policyDto.getPrem());
+        policyDto.setPolicyNo(policyNo);
+        policyDto.setOrderNo(orderNo);
 
         // ================= 1. 锚定真实的“出单业务员”身份 =================
         String agentCode = policyDto.getAgentCode();
@@ -76,26 +88,19 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         try {
             TenantHelper.setDynamic(tenantId);
 
-            // ================= 2. 查产品详情与防重 =================
-            String productPlanCode = policyDto.getProductPlanCode();
-
-//            InsuranceProductConfig product = insuranceProductConfigService.queryByProductCodeAndTenantId(productPlanCode, tenantId);
-//            if (product == null) {
-//                throw new ServiceException("产品不存在");
-//            }
-            // 🌟 去平台总库（000000）查出真实的系统产品
-            // 🌟 完美替换 1：用 Mapper 直接查平台总库
-            InsuranceProductConfig product = TenantHelper.dynamic("000000", () -> {
-                return insuranceProductConfigMapper.selectOne(
-                    new LambdaQueryWrapper<InsuranceProductConfig>()
-                        .eq(InsuranceProductConfig::getProductCode, productPlanCode)
-                        .last("LIMIT 1") // 防御性限制，只取第一条
-                );
-            });
-            if (product == null) {
-                log.error("平台总库中不存在该产品代码，productCode={}", productPlanCode);
-                throw new ServiceException("系统未配置该产品");
+            InsurancePolicy existingPolicy = insurancePolicyService.queryByPolicyNoAndTenantId(policyNo, tenantId);
+            if (existingPolicy != null) {
+                return ResultModel.success("该保单号对应数据已存在");
             }
+
+            InsuranceApplyRecord applyRecord = insuranceApplyRecordMapper.selectOne(
+                new LambdaQueryWrapper<InsuranceApplyRecord>()
+                    .eq(InsuranceApplyRecord::getOrderNo, orderNo)
+                    .last("LIMIT 1")
+            );
+
+            // ================= 2. 查产品详情与防重 =================
+            InsuranceProductConfig product = resolveProduct(policyDto, applyRecord);
 
             // 防止上面的 dynamic 方法在底层清空了上下文
             TenantHelper.setDynamic(tenantId);
@@ -113,10 +118,12 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
                 // 记录严重越权警告（可视业务情况决定是否 throw 阻断）
                 log.warn("【越权出单警告】业务员卖出了未在机构货架上架的产品！tenantId={}, productId={}", tenantId, product.getId());
             }
-            String policyNo = policyDto.getPolicyNo();
-            InsurancePolicy existingPolicy = insurancePolicyService.queryByPolicyNoAndTenantId(policyNo, tenantId);
-            if (existingPolicy != null) {
-                return ResultModel.success("该保单号对应数据已存在");
+            if (applyRecord != null) {
+                Integer commissionStatus = Objects.equals(applyRecord.getCommissionStatus(), 0) ? 0 : 1;
+                Long policyId = createPolicy(policyCallbackDto, product, salesUser, tenantId,
+                    orderNo, premium, commissionStatus);
+                log.info("【承保回调】保单已关联投保订单，不重复计算佣金，policyId={}, orderNo={}", policyId, orderNo);
+                return ResultModel.success(policyId);
             }
 
             // ================= 3. 精准架构寻址（上一回合我们定好的完美逻辑） =================
@@ -178,7 +185,6 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
             calcParam.setProductId(product.getId());
             calcParam.setProductName(product.getProductName());
             calcParam.setTenantId(tenantId);
-            BigDecimal premium = parseAmountOrZero(policyDto.getPrem());
             calcParam.setPolicyPremium(premium);
             calcParam.setNetPremium(premium); // 常规保单实交保费等于原价
 
@@ -189,7 +195,8 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
 
             // ================= 5. 保存保单 (废弃 switchTo 伪装) =================
             // 回调接口无真实登录态，直接传参进去，在里面显式 set
-            Long policyId = createPolicy(policyCallbackDto, product, salesUser, tenantId, salesDeptId);
+            Long policyId = createPolicy(policyCallbackDto, product, salesUser, tenantId,
+                orderNo, premium, 1);
             calcParam.setPolicyId(policyId);
 
             // ================= 6. 触发佣金计算事件 =================
@@ -202,6 +209,49 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         }
     }
 
+    InsuranceProductConfig resolveProduct(PolicyDto policyDto, InsuranceApplyRecord applyRecord) {
+        return TenantHelper.dynamic("000000", () -> {
+            if (applyRecord != null) {
+                InsuranceProductConfig applyProduct = insuranceProductConfigMapper.selectById(applyRecord.getProductId());
+                if (applyProduct == null) {
+                    throw new ServiceException("投保订单对应的平台产品不存在");
+                }
+                return applyProduct;
+            }
+
+            String sourceProductCode = requireCallbackValue(
+                policyDto.getProductPlanCode(), "回调产品编码不能为空");
+            InsuranceProductConfig directProduct = insuranceProductConfigMapper.selectOne(
+                new LambdaQueryWrapper<InsuranceProductConfig>()
+                    .eq(InsuranceProductConfig::getProductCode, sourceProductCode)
+                    .last("LIMIT 1")
+            );
+            if (directProduct != null) {
+                return directProduct;
+            }
+
+            String companyType = requireCallbackValue(policyDto.getCompanyType(), "回调渠道类型不能为空");
+            InsuranceProductChannelMapping mapping = productChannelMappingMapper.selectOne(
+                new LambdaQueryWrapper<InsuranceProductChannelMapping>()
+                    .eq(InsuranceProductChannelMapping::getCompanyType, companyType)
+                    .eq(InsuranceProductChannelMapping::getSourceProductCode, sourceProductCode)
+                    .last("LIMIT 1")
+            );
+            if (mapping == null) {
+                log.warn("未配置渠道产品映射，companyType={}, productPlanCode={}", companyType, sourceProductCode);
+                throw new ServiceException("未配置渠道产品映射：" + companyType + "/" + sourceProductCode);
+            }
+
+            InsuranceProductConfig mappedProduct = insuranceProductConfigMapper.selectById(mapping.getProductId());
+            if (mappedProduct == null) {
+                log.error("渠道产品映射指向不存在的平台产品，mappingId={}, productId={}",
+                    mapping.getId(), mapping.getProductId());
+                throw new ServiceException("渠道产品映射对应的平台产品不存在");
+            }
+            return mappedProduct;
+        });
+    }
+
     @Override
     public SysUserVo getUserByUserId(Long userId) {
         return sysUserService.selectUserById(userId);
@@ -210,20 +260,25 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
     /**
      * 新增保单
      */
-    private Long createPolicy(PolicyCallbackDto policyCallbackDto,InsuranceProductConfig product,SysUserVo sysUser,String tenantId,Long createDeptId) {
+    private Long createPolicy(PolicyCallbackDto policyCallbackDto, InsuranceProductConfig product,
+                              SysUserVo sysUser, String tenantId, String orderNo,
+                              BigDecimal premium, Integer commissionStatus) {
         InsurancePolicyBo insurancePolicyBo = new InsurancePolicyBo();
         insurancePolicyBo.setProductId(product.getId());
-        insurancePolicyBo.setProductCode(product.getProductCode());
-        insurancePolicyBo.setProductName(product.getProductName());
+        insurancePolicyBo.setProductCode(policyCallbackDto.getPolicy().getProductPlanCode());
+        insurancePolicyBo.setProductName(policyCallbackDto.getPolicy().getProductPlanName());
         insurancePolicyBo.setPolicyNo(policyCallbackDto.getPolicy().getPolicyNo());
-        insurancePolicyBo.setOrderNo(policyCallbackDto.getPolicy().getOrderNo());
+        insurancePolicyBo.setOrderNo(orderNo);
+        insurancePolicyBo.setSourceCompanyType(policyCallbackDto.getPolicy().getCompanyType());
+        insurancePolicyBo.setSourceProductCode(policyCallbackDto.getPolicy().getProductPlanCode());
+        insurancePolicyBo.setSourceProductName(policyCallbackDto.getPolicy().getProductPlanName());
         insurancePolicyBo.setAgentName(sysUser.getNickName());
         insurancePolicyBo.setAgentUserId(sysUser.getUserId());
         insurancePolicyBo.setAgentDeptId(sysUser.getDeptId());
-        insurancePolicyBo.setPremium(parseAmountOrZero(policyCallbackDto.getPolicy().getPrem()));
+        insurancePolicyBo.setPremium(premium);
         insurancePolicyBo.setAmt(parseAmountOrZero(policyCallbackDto.getPolicy().getAmt()));
         // 未结算
-        insurancePolicyBo.setCommissionStatus(1);
+        insurancePolicyBo.setCommissionStatus(commissionStatus);
         // 已生效
         insurancePolicyBo.setStatus(0);
         insurancePolicyBo.setAppntDate(DateUtil.parse(policyCallbackDto.getPolicy().getAppntDate()));
@@ -256,6 +311,26 @@ public class OpenPolicyFacadeServiceImpl implements IOpenPolicyFacadeService {
         }
 
         return insurancePolicyBo.getId();
+    }
+
+    private String requireCallbackValue(String value, String message) {
+        if (StringUtils.isBlank(value)) {
+            throw new ServiceException(message);
+        }
+        return value.trim();
+    }
+
+    private BigDecimal parsePremium(String amount) {
+        String premiumText = requireCallbackValue(amount, "保费不能为空");
+        try {
+            BigDecimal premium = new BigDecimal(premiumText);
+            if (premium.signum() < 0) {
+                throw new ServiceException("保费不能小于0");
+            }
+            return premium;
+        } catch (NumberFormatException e) {
+            throw new ServiceException("保费格式错误");
+        }
     }
 
     private BigDecimal parseAmountOrZero(String amount) {

@@ -205,8 +205,8 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         if (!isEffective(now, productBase.getEffectiveTime(), productBase.getExpirationTime())) {
             throw new ServiceException("产品基础佣金费率不在有效期内");
         }
-        BigDecimal totalCommission = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
-        log.info("保单号："+calcCommission.getPolicyNo()+",保单保费："+calcCommission.getPolicyPremium()+"，佣金计算基数为："+totalCommission);
+        BigDecimal configuredCommissionBase = calcCommission.getPolicyPremium().multiply(productBase.getCommissionRate());
+        log.info("保单号："+calcCommission.getPolicyNo()+",保单保费："+calcCommission.getPolicyPremium()+"，配置佣金基数为："+configuredCommissionBase);
 
         // ================= 2. 尝试匹配特殊产品佣金费率 =================
         BizCommissionProduct specialProduct = bizCommissionProductService.queryByProductIdAndTenantId(productId, tenantId);
@@ -217,7 +217,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             log.info("团队佣金比例：{}",specialProduct.getTeamRatio());
             log.info("机构佣金比例：{}",specialProduct.getProjectRatio());
             // 🌟 传入 paymentMode 和 payerUserId (直接从 calcCommission 取即可)
-            calculateAndSaveRecord(calcCommission, totalCommission, productBase.getCommissionRate(),
+            calculateAndSaveRecord(calcCommission, productBase.getCommissionRate(),
                 specialProduct.getSalesRatio(), specialProduct.getTeamRatio(), specialProduct.getProjectRatio(), 0);
             return;
         }
@@ -241,7 +241,7 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
             log.info("业务员佣金比例：{}",deptCommission.getSalesRatio());
             log.info("团队佣金比例：{}",deptCommission.getTeamRatio());
             log.info("机构佣金比例：{}",deptCommission.getProjectRatio());
-            calculateAndSaveRecord(calcCommission, totalCommission, productBase.getCommissionRate(),
+            calculateAndSaveRecord(calcCommission, productBase.getCommissionRate(),
                 deptCommission.getSalesRatio(), deptCommission.getTeamRatio(), deptCommission.getProjectRatio(), 1);
             return;
         }
@@ -456,17 +456,19 @@ public class BizCommissionRecordServiceImpl implements IBizCommissionRecordServi
         }
     }
 
-    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal totalCommission,
-                                        BigDecimal baseRate, BigDecimal sRatio, BigDecimal tRatio,
+    private void calculateAndSaveRecord(CalcCommission calcCommission, BigDecimal baseRate,
+                                        BigDecimal sRatio, BigDecimal tRatio,
                                         BigDecimal pRatio, Integer strategy) {
 
-        // 🌟 1. 各角色有效费率先向下取整到整数百分比，佣金金额再四舍五入保留2位小数
-        BigDecimal salesCommission = CommissionCalculationUtils.calculateCommissionAmount(
-            calcCommission.getPolicyPremium(), baseRate, sRatio);
-        BigDecimal teamCommission = CommissionCalculationUtils.calculateCommissionAmount(
-            calcCommission.getPolicyPremium(), baseRate, tRatio);
-        BigDecimal projectCommission = CommissionCalculationUtils.calculateCommissionAmount(
-            calcCommission.getPolicyPremium(), baseRate, pRatio);
+        // 🌟 1. 业务员、团队档分别取整，费率与金额尾差统一归项目负责人
+        CommissionCalculationUtils.RoleRateResult roleRates = CommissionCalculationUtils.calculateRoleRates(
+            baseRate, sRatio, tRatio, pRatio);
+        CommissionCalculationUtils.RoleAmountResult roleAmounts = CommissionCalculationUtils.calculateRoleAmounts(
+            calcCommission.getPolicyPremium(), roleRates);
+        BigDecimal totalCommission = roleAmounts.totalAmount();
+        BigDecimal salesCommission = roleAmounts.salesAmount();
+        BigDecimal teamCommission = roleAmounts.teamAmount();
+        BigDecimal projectCommission = roleAmounts.projectAmount();
         log.info("保单号："+calcCommission.getPolicyNo()+"，业务员佣金："+salesCommission);
         log.info("保单号："+calcCommission.getPolicyNo()+"，团队佣金："+teamCommission);
         log.info("保单号："+calcCommission.getPolicyNo()+"，机构佣金："+projectCommission);

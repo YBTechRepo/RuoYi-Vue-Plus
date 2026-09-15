@@ -516,6 +516,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         @DataColumn(key = "userName", value = "create_by")
     })
     public VoucherPdfResult generateVoucherPdf(String orderNo) {
+        return generateVoucherPdfByOrderNo(orderNo, false);
+    }
+
+    private VoucherPdfResult generateVoucherPdfByOrderNo(String orderNo, boolean policyVoucher) {
         if (StringUtils.isBlank(orderNo)) {
             throw new ServiceException("订单号不能为空");
         }
@@ -547,7 +551,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             }
         }
 
-        return renderVoucherPdf(record, applicant, insured, productData);
+        return renderVoucherPdf(record, applicant, insured, productData, policyVoucher);
     }
 
     @Override
@@ -568,7 +572,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
         if (StringUtils.isNotBlank(policy.getOrderNo()) && !StringUtils.equals(policy.getOrderNo(), policy.getPolicyNo())) {
             try {
-                return generateVoucherPdf(policy.getOrderNo());
+                return generateVoucherPdfByOrderNo(policy.getOrderNo(), true);
             } catch (ServiceException e) {
                 log.warn("保单 {} 关联订单 {} 生成投保凭证失败，将使用保单信息生成凭证", policyNo, policy.getOrderNo(), e);
             }
@@ -616,11 +620,12 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             }
         }
 
-        return renderVoucherPdf(record, applicant, insured, productData);
+        return renderVoucherPdf(record, applicant, insured, productData, true);
     }
 
-    private VoucherPdfResult renderVoucherPdf(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured, InsuranceProductSaveBo productData) {
-        String html = buildVoucherHtml(record, applicant, insured, productData);
+    private VoucherPdfResult renderVoucherPdf(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured,
+                                               InsuranceProductSaveBo productData, boolean policyVoucher) {
+        String html = buildVoucherHtml(record, applicant, insured, productData, policyVoucher);
         String fileName = sanitizeFileName(display(record.getProductName(), "投保凭证") + "-投保凭证_" + record.getOrderNo() + ".pdf");
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -637,7 +642,8 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         }
     }
 
-    private String buildVoucherHtml(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured, InsuranceProductSaveBo productData) {
+    private String buildVoucherHtml(InsuranceApplyRecord record, InsuranceOrderApplicant applicant, InsuranceOrderInsured insured,
+                                    InsuranceProductSaveBo productData, boolean policyVoucher) {
         StringBuilder html = new StringBuilder();
         html.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\" />")
             .append("<style>")
@@ -656,7 +662,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         html.append("<h1>").append(escapeHtml(display(record.getProductName(), "--"))).append("-投保凭证</h1>");
         html.append("<div class=\"notice\">本凭证用于证明用户已完成投保信息提交及订单生成。具体承保结果、保障责任、免责条款及理赔要求，最终以保险公司出具的正式保单、保险条款及保险公司审核结果为准。</div>");
 
-        appendOrderInfo(html, record);
+        appendOrderInfo(html, record, policyVoucher && isRegularProduct(record, productData));
         appendInsureNotice(html, productData);
         if (Objects.equals(record.getInsureMode(), 1)) {
             appendApplicantInfo(html, record, applicant);
@@ -672,12 +678,25 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         return html.toString();
     }
 
-    private void appendOrderInfo(StringBuilder html, InsuranceApplyRecord record) {
+    private boolean isRegularProduct(InsuranceApplyRecord record, InsuranceProductSaveBo productData) {
+        Integer productMode = record == null ? null : record.getProductMode();
+        if (productMode == null && productData != null && productData.getProduct() != null) {
+            productMode = productData.getProduct().getProductMode();
+        }
+        return Objects.equals(productMode, 2);
+    }
+
+    private void appendOrderInfo(StringBuilder html, InsuranceApplyRecord record, boolean hidePolicyPremium) {
         html.append("<div class=\"section-title\">订单信息</div><table><tbody>")
-            .append(row("订单号", record.getOrderNo(), "下单时间", formatDate(record.getCreateTime())))
-            .append(row("起保日期", formatDate(record.getPolicyStartDate()), "保单保费", record.getPremium()))
-            .append(row("登记客户", record.getCustomerName(), "客户手机号", record.getCustomerMobile()))
-            .append("<tr><td class=\"label\">业务员姓名</td><td class=\"value\" colspan=\"3\">").append(escapeHtml(display(record.getAgentName(), "--"))).append("</td></tr>")
+            .append(row("订单号", record.getOrderNo(), "下单时间", formatDate(record.getCreateTime())));
+        if (hidePolicyPremium) {
+            html.append("<tr><td class=\"label\">起保日期</td><td class=\"value\" colspan=\"3\">")
+                .append(escapeHtml(display(formatDate(record.getPolicyStartDate()), "--")))
+                .append("</td></tr>");
+        } else {
+            html.append(row("起保日期", formatDate(record.getPolicyStartDate()), "保单保费", record.getPremium()));
+        }
+        html.append(row("登记客户", record.getCustomerName(), "客户手机号", record.getCustomerMobile()))
             .append("</tbody></table>");
     }
 
@@ -1395,19 +1414,18 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         boolean isLeader = StpUtil.hasRole("leader");         // 顶级项目总监
         boolean isTeamLeader = StpUtil.hasRole("teamleader"); // 团队长
         boolean isBizMan = StpUtil.hasRole("bizman");         // 基层业务员
-        BigDecimal bizEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentBizRatio);
-        BigDecimal teamEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentTeamRatio);
-        BigDecimal leaderEffectiveRate = CommissionCalculationUtils.calculateEffectiveRate(baseRate, currentLeaderRatio);
+        CommissionCalculationUtils.RoleRateResult roleRates = CommissionCalculationUtils.calculateRoleRates(
+            baseRate, currentBizRatio, currentTeamRatio, currentLeaderRatio);
 
         if (isLeader) {
             // 总监：拿自己作为业务员的钱 + 团队长的钱 + 总监的钱
-            finalRate = bizEffectiveRate.add(teamEffectiveRate).add(leaderEffectiveRate);
+            finalRate = roleRates.projectDisplayRate();
         } else if (isTeamLeader) {
             // 团队长：拿自己作为业务员的钱 + 团队长的钱
-            finalRate = bizEffectiveRate.add(teamEffectiveRate);
+            finalRate = roleRates.teamDisplayRate();
         } else if (isBizMan) {
             // 基层业务员：只拿业务员的钱
-            finalRate = bizEffectiveRate;
+            finalRate = roleRates.salesDisplayRate();
         }
 
         return finalRate;

@@ -73,6 +73,13 @@ public class CommissionEventListener {
             .eq(InsuranceApplyRecord::getStatus, 0)
             .ne(InsuranceApplyRecord::getCommissionStatus, 0));
         log.info("【投保申请结算状态回写】订单号: {}, 更新行数: {}", param.getPolicyNo(), rows);
+
+        int policyRows = insurancePolicyMapper.update(null, Wrappers.<InsurancePolicy>lambdaUpdate()
+            .set(InsurancePolicy::getCommissionStatus, 0)
+            .eq(InsurancePolicy::getOrderNo, param.getPolicyNo())
+            .eq(InsurancePolicy::getStatus, 0)
+            .ne(InsurancePolicy::getCommissionStatus, 0));
+        log.info("【关联保单结算状态回写】订单号: {}, 更新行数: {}", param.getPolicyNo(), policyRows);
     }
 
     private void markPolicyCommissionSettled(CalcCommission param) {

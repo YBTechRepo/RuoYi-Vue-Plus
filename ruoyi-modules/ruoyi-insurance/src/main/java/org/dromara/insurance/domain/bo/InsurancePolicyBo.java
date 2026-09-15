@@ -58,6 +58,21 @@ public class InsurancePolicyBo extends BaseEntity {
     private String orderNo;
 
     /**
+     * 回调渠道类型
+     */
+    private String sourceCompanyType;
+
+    /**
+     * 回调原始产品编码
+     */
+    private String sourceProductCode;
+
+    /**
+     * 回调原始产品名称
+     */
+    private String sourceProductName;
+
+    /**
      * 业务人员姓名
      */
     @NotBlank(message = "业务人员姓名不能为空", groups = { AddGroup.class, EditGroup.class })

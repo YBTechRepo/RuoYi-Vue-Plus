@@ -40,5 +40,10 @@ public class InsuranceProductSaveBo {
      */
     private List<InsuranceProductDetail.CardSpecItem> cardSpecs;
 
+    /**
+     * 渠道回调产品编码映射
+     */
+    private List<InsuranceProductChannelMappingBo> channelProductMappings;
+
     private String imgUrl;
 }
