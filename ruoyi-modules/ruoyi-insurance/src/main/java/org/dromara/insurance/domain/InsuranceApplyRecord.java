@@ -182,4 +182,6 @@ public class InsuranceApplyRecord extends TenantEntity {
      * 起保日期
      */
     private Date policyStartDate;
+
+    private Boolean applicationFormRequired;
 }

@@ -144,4 +144,9 @@ public class InsuranceProductConfig extends TenantEntity {
 
 //    @TableField(typeHandler = JacksonTypeHandler.class)
 //    private List<ServiceFeeConfig> serviceFeeConfig;
+
+    /** 是否启用签字投保单，仅卡单代投保。 */
+    private Boolean applicationFormRequired;
+    private String applicationTemplateCode;
+    private String applicationTemplateVersion;
 }

@@ -30,6 +30,7 @@ import java.util.Collection;
 @RequiredArgsConstructor
 @Service
 public class InsuranceOrderInsuredServiceImpl implements IInsuranceOrderInsuredService {
+    private final org.dromara.insurance.service.ApplicationFormGuard applicationFormGuard;
 
     private final InsuranceOrderInsuredMapper baseMapper;
 
@@ -93,7 +94,9 @@ public class InsuranceOrderInsuredServiceImpl implements IInsuranceOrderInsuredS
      * @return 是否新增成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean insertByBo(InsuranceOrderInsuredBo bo) {
+        applicationFormGuard.assertDirectPersonEditAllowed(bo.getOrderNo());
         InsuranceOrderInsured add = MapstructUtils.convert(bo, InsuranceOrderInsured.class);
         validEntityBeforeSave(add);
         boolean flag = baseMapper.insert(add) > 0;
@@ -110,7 +113,11 @@ public class InsuranceOrderInsuredServiceImpl implements IInsuranceOrderInsuredS
      * @return 是否修改成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean updateByBo(InsuranceOrderInsuredBo bo) {
+        var existing=baseMapper.selectById(bo.getId());
+        if(existing!=null)applicationFormGuard.assertDirectPersonEditAllowed(existing.getOrderNo());
+        applicationFormGuard.assertDirectPersonEditAllowed(bo.getOrderNo());
         InsuranceOrderInsured update = MapstructUtils.convert(bo, InsuranceOrderInsured.class);
         validEntityBeforeSave(update);
         return baseMapper.updateById(update) > 0;
@@ -131,7 +138,9 @@ public class InsuranceOrderInsuredServiceImpl implements IInsuranceOrderInsuredS
      * @return 是否删除成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
+        for(var existing:baseMapper.selectByIds(ids))applicationFormGuard.assertDirectPersonEditAllowed(existing.getOrderNo());
         if(isValid){
             //TODO 做一些业务上的校验,判断是否需要校验
         }

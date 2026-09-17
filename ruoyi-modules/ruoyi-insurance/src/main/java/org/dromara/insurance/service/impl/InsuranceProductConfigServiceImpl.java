@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Service
 public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfigService {
+    private final org.dromara.insurance.service.ApplicationFormTemplate applicationFormTemplate;
 
     private final InsuranceProductConfigMapper baseMapper;
 
@@ -195,6 +196,16 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(InsuranceProductConfig entity){
+        // 部分更新也必须按最终保存的产品状态校验签署限制。
+        InsuranceProductConfig effective = entity;
+        if (entity.getId() != null) {
+            InsuranceProductConfig stored = baseMapper.selectById(entity.getId());
+            if (stored != null) {
+                effective = stored;
+                BeanUtil.copyProperties(entity, effective, cn.hutool.core.bean.copier.CopyOptions.create().setIgnoreNullValue(true));
+            }
+        }
+        applicationFormTemplate.validateProduct(effective);
         //TODO 做一些数据校验,如唯一约束
     }
 
@@ -659,6 +670,7 @@ public class InsuranceProductConfigServiceImpl implements IInsuranceProductConfi
         // ===============================================================
 
         InsuranceProductConfig mainProduct = BeanUtil.copyProperties(productBo, InsuranceProductConfig.class);
+        validEntityBeforeSave(mainProduct);
 
         if (mainProduct.getId() == null) {
             baseMapper.insert(mainProduct);

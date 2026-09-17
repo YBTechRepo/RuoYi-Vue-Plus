@@ -30,6 +30,7 @@ import java.util.Collection;
 @RequiredArgsConstructor
 @Service
 public class InsuranceOrderApplicantServiceImpl implements IInsuranceOrderApplicantService {
+    private final org.dromara.insurance.service.ApplicationFormGuard applicationFormGuard;
 
     private final InsuranceOrderApplicantMapper baseMapper;
 
@@ -92,7 +93,9 @@ public class InsuranceOrderApplicantServiceImpl implements IInsuranceOrderApplic
      * @return 是否新增成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean insertByBo(InsuranceOrderApplicantBo bo) {
+        applicationFormGuard.assertDirectPersonEditAllowed(bo.getOrderNo());
         InsuranceOrderApplicant add = MapstructUtils.convert(bo, InsuranceOrderApplicant.class);
         validEntityBeforeSave(add);
         boolean flag = baseMapper.insert(add) > 0;
@@ -109,7 +112,11 @@ public class InsuranceOrderApplicantServiceImpl implements IInsuranceOrderApplic
      * @return 是否修改成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean updateByBo(InsuranceOrderApplicantBo bo) {
+        var existing=baseMapper.selectById(bo.getId());
+        if(existing!=null)applicationFormGuard.assertDirectPersonEditAllowed(existing.getOrderNo());
+        applicationFormGuard.assertDirectPersonEditAllowed(bo.getOrderNo());
         InsuranceOrderApplicant update = MapstructUtils.convert(bo, InsuranceOrderApplicant.class);
         validEntityBeforeSave(update);
         return baseMapper.updateById(update) > 0;
@@ -130,7 +137,9 @@ public class InsuranceOrderApplicantServiceImpl implements IInsuranceOrderApplic
      * @return 是否删除成功
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
+        for(var existing:baseMapper.selectByIds(ids))applicationFormGuard.assertDirectPersonEditAllowed(existing.getOrderNo());
         if(isValid){
             //TODO 做一些业务上的校验,判断是否需要校验
         }

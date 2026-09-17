@@ -184,7 +184,7 @@ public class InsuranceApplyRecordController extends BaseController {
     public R<SaveInsureResultVO> saveInsureInfo(@PathVariable("orderNo") String orderNo,
                                   @RequestBody OrderInsureInfoDTO infoDTO) {
         log.info("orderNo：{}",orderNo);
-        log.info("infoDTO：{}", JsonUtils.toJsonString(infoDTO));
+        // 投保资料包含个人敏感信息，不记录完整请求体。
         SaveInsureResultVO saveInsureResultVO = insuranceApplyRecordService.saveInsureInfo(orderNo, infoDTO);
         log.info("saveInsureResultVO：{}", JsonUtils.toJsonString(saveInsureResultVO));
         return R.ok(saveInsureResultVO);

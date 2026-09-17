@@ -58,6 +58,7 @@ import java.util.*;
 @RestController
 @RequestMapping("/insurance/batch")
 public class BatchInsuranceController {
+    private final org.dromara.insurance.service.ApplicationFormGuard applicationFormGuard;
 
     private final IInsuranceProductConfigService insuranceProductConfigService;
 
@@ -75,6 +76,7 @@ public class BatchInsuranceController {
     @PostMapping("/importData")
     public R<Map<String, Object>> importData(@RequestParam("productId") Long productId,
                                              @RequestPart("file") MultipartFile file) throws IOException {
+        applicationFormGuard.assertBatchAllowed(productId);
         List<DynamicInsureFieldUtils.Field> dynamicFields = queryDynamicFields(productId);
         BatchRawImportListener listener = new BatchRawImportListener(dynamicFields, dictService);
         FastExcel.read(file.getInputStream(), listener).headRowNumber(0).sheet().doRead();
@@ -105,6 +107,7 @@ public class BatchInsuranceController {
             "被保人手机号",
             "被保人地址"
         );
+        applicationFormGuard.assertBatchAllowed(productId);
         List<DynamicInsureFieldUtils.Field> dynamicFields = queryDynamicFields(productId);
         String fileName = URLEncoder.encode("人员清单导入模板.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -125,6 +128,7 @@ public class BatchInsuranceController {
     @RepeatSubmit()
     @PostMapping("/preview")
     public R<BatchPreviewVO> preview(@RequestBody BatchSubmitDTO batchSubmitDTO) {
+        applicationFormGuard.assertBatchAllowed(batchSubmitDTO.getProductId());
         log.info("批量投保计算-请求参数：{}", JsonUtils.toJsonString(batchSubmitDTO));
 
         // 1. 参数校验

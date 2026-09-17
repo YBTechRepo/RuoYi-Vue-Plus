@@ -33,6 +33,7 @@ import org.dromara.insurance.mapper.InsuranceOrderApplicantMapper;
 import org.dromara.insurance.mapper.InsuranceOrderInsuredMapper;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
 import org.dromara.insurance.service.IInsuranceProxyOrderService;
+import org.dromara.insurance.service.ApplicationFormGuard;
 import org.dromara.insurance.utils.DynamicInsureFieldUtils;
 import org.dromara.system.domain.vo.SysDictDataVo;
 import org.dromara.system.domain.vo.SysTenantVo;
@@ -73,6 +74,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
     private final ISysTenantService sysTenantService;
     private final IInsuranceProductConfigService productConfigService;
     private final ISysDictTypeService sysDictTypeService;
+    private final ApplicationFormGuard applicationFormGuard;
 
     /**
      * 查询代投保订单查询
@@ -87,6 +89,9 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
                 .eq(InsuranceApplyRecord::getId, id)
                 .eq(InsuranceApplyRecord::getInsureMode, 1));
             fillTenantName(vo);
+            if (vo != null) {
+                applicationFormGuard.enrichPlatform(List.of(vo));
+            }
             return vo;
         });
     }
@@ -104,6 +109,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
             LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
             Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
             fillTenantNames(result.getRecords());
+            applicationFormGuard.enrichPlatform(result.getRecords());
             return TableDataInfo.build(result);
         });
     }
@@ -120,6 +126,7 @@ public class InsuranceProxyOrderServiceImpl implements IInsuranceProxyOrderServi
             LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
             List<InsuranceApplyRecordVo> list = baseMapper.selectVoList(lqw);
             fillTenantNames(list);
+            applicationFormGuard.enrichPlatform(list);
             return list;
         });
     }

@@ -87,6 +87,8 @@ import java.util.*;
 @RequiredArgsConstructor
 @Service
 public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordService {
+    private final org.dromara.insurance.service.ApplicationFormGuard applicationFormGuard;
+
 
     private final InsuranceApplyRecordMapper baseMapper;
 
@@ -143,6 +145,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     public TableDataInfo<InsuranceApplyRecordVo> queryPageList(InsuranceApplyRecordBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<InsuranceApplyRecord> lqw = buildQueryWrapper(bo);
         Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+        applicationFormGuard.enrich(result.getRecords());
         return TableDataInfo.build(result);
     }
 
@@ -419,6 +422,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         lqw.eq(InsuranceApplyRecord::getIsBatch, 2);
         lqw.eq(InsuranceApplyRecord::getBatchOrderNo, orderNo);
         Page<InsuranceApplyRecordVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+        applicationFormGuard.enrich(result.getRecords());
         return TableDataInfo.build(result);
     }
 
@@ -941,8 +945,26 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 是否新增成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean insertByBo(InsuranceApplyRecordBo bo) {
         InsuranceApplyRecord add = MapstructUtils.convert(bo, InsuranceApplyRecord.class);
+        var formProduct = applicationFormGuard.product(bo.getProductId());
+        if (formProduct != null && Boolean.TRUE.equals(formProduct.getApplicationFormRequired())) {
+            add.setApplicationFormRequired(true);
+            add.setProductMode(formProduct.getProductMode());
+            add.setInsureMode(formProduct.getInsureMode());
+            add.setPaymentMode(formProduct.getPaymentMode());
+            add.setProductName(formProduct.getProductName());
+            add.setProductCode(formProduct.getProductCode());
+            add.setPremium(formProduct.getMinPremium());
+            add.setNetPremium(null);
+            add.setPayTime(null);
+            add.setStatus(2);
+            add.setIsBatch(0);
+            add.setBatchOrderNo(null);
+            add.setAgentUserId(LoginHelper.getUserId());
+            add.setAgentDeptId(LoginHelper.getDeptId());
+        }
 
         //投保模式 0-自投保 1-代投保
         //支付模式 0-常规支付 1-余额代扣
@@ -964,7 +986,17 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
      * @return 是否修改成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean updateByBo(InsuranceApplyRecordBo bo) {
+        InsuranceApplyRecord existing = baseMapper.selectById(bo.getId());
+        if (existing != null) {
+            existing = applicationFormGuard.lock(existing.getOrderNo());
+            if (applicationFormGuard.required(existing))
+                throw new ServiceException("签署订单请通过投保流程修改，不能通过普通编辑覆盖");
+        }
+        var targetProduct = bo.getProductId() == null ? null : applicationFormGuard.product(bo.getProductId());
+        if (targetProduct != null && Boolean.TRUE.equals(targetProduct.getApplicationFormRequired()))
+            throw new ServiceException("请重新创建签署投保订单，不能通过普通编辑切换产品");
         InsuranceApplyRecord update = MapstructUtils.convert(bo, InsuranceApplyRecord.class);
         validEntityBeforeSave(update);
         return baseMapper.updateById(update) > 0;
@@ -1028,6 +1060,10 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Boolean handleOrderPaySuccess(Long orderId) {
+        InsuranceApplyRecord locked = baseMapper.selectById(orderId);
+        if (locked == null) throw new ServiceException("订单不存在");
+        locked = applicationFormGuard.lock(locked.getOrderNo());
+        applicationFormGuard.assertReady(locked);
         // 1. 根据订单号查出当前订单
         InsuranceApplyRecordVo order = baseMapper.selectVoById(orderId);
         if(order == null){
@@ -1073,7 +1109,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         // ==========================================
         InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
             .eq(InsuranceApplyRecord::getOrderNo, orderNo)
-            .eq(InsuranceApplyRecord::getDelFlag, "0"));
+            .eq(InsuranceApplyRecord::getDelFlag, "0").last("FOR UPDATE"));
 
         if (record == null) {
             throw new ServiceException("无效的订单记录");
@@ -1083,6 +1119,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             return saveCardSecretOrderInfo(orderNo, infoDTO, record);
         }
 
+        applicationFormGuard.beforeSave(record, infoDTO.getInsuredList() == null ? 0 : infoDTO.getInsuredList().size());
         validateRegularInsureInfo(infoDTO);
         Date policyStartDate = parsePolicyStartDate(infoDTO.getPolicyStartDate());
 
@@ -1118,9 +1155,15 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
 
         InsuranceApplyRecord extraUpdate = new InsuranceApplyRecord();
         extraUpdate.setId(record.getId());
+        extraUpdate.setApplicationFormRequired(record.getApplicationFormRequired());
         extraUpdate.setInsureExtraData(JsonUtils.toJsonString(infoDTO.getExtraData()));
         extraUpdate.setPolicyStartDate(policyStartDate);
         baseMapper.updateById(extraUpdate);
+        if (Boolean.TRUE.equals(record.getApplicationFormRequired())) {
+            // 后续净费更新会再次保存 record，须保留本次签署资料和起保日期。
+            record.setInsureExtraData(extraUpdate.getInsureExtraData());
+            record.setPolicyStartDate(policyStartDate);
+        }
 
         // 准备通用的返回对象
         SaveInsureResultVO saveInsureResultVO = new SaveInsureResultVO();
@@ -1265,11 +1308,13 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
         // ==========================================
         InsuranceApplyRecord record = baseMapper.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
             .eq(InsuranceApplyRecord::getOrderNo, orderNo)
-            .eq(InsuranceApplyRecord::getDelFlag, "0"));
+            .eq(InsuranceApplyRecord::getDelFlag, "0").last("FOR UPDATE"));
 
         if (record == null) {
             throw new ServiceException("订单不存在");
         }
+
+        applicationFormGuard.assertReady(record);
 
         // 防重付拦截
         if (record.getStatus() == 0) {
@@ -1520,6 +1565,7 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String submitBatch(BatchSubmitDTO submitDTO) {
+        if (submitDTO != null) applicationFormGuard.assertBatchAllowed(submitDTO.getProductId());
         if (submitDTO == null || CollUtil.isEmpty(submitDTO.getAuditList())) {
             throw new ServiceException("投保人员名单不能为空");
         }
@@ -1656,6 +1702,11 @@ public class InsuranceApplyRecordServiceImpl implements IInsuranceApplyRecordSer
             throw new ServiceException("订单不存在");
         }
 
+        if (applicationFormGuard.required(record)) {
+            record = applicationFormGuard.lock(record.getOrderNo());
+            applicationFormGuard.assertEditable(record);
+            applicationFormGuard.invalidate(record.getOrderNo());
+        }
         // 防越权：确保当前登录人只能取消自己的订单
         if (!record.getAgentUserId().equals(LoginHelper.getUserId())) {
             throw new ServiceException("非法操作：无权取消此订单");

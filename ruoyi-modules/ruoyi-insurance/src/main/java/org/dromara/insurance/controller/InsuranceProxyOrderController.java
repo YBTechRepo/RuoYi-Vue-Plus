@@ -2,6 +2,9 @@ package org.dromara.insurance.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,6 +25,7 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.insurance.service.IInsuranceProxyOrderService;
+import org.dromara.insurance.service.InsuranceApplicationFormService;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 
 /**
@@ -38,6 +42,7 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 public class InsuranceProxyOrderController extends BaseController {
 
     private final IInsuranceProxyOrderService insuranceProxyOrderService;
+    private final InsuranceApplicationFormService insuranceApplicationFormService;
 
     /**
      * 查询代投保订单查询列表
@@ -86,6 +91,33 @@ public class InsuranceProxyOrderController extends BaseController {
     public R<InsuranceApplyRecordVo> getInfo(@NotNull(message = "主键不能为空")
                                      @PathVariable Long id) {
         return R.ok(insuranceProxyOrderService.queryById(id));
+    }
+
+    /**
+     * 查询代投保订单的签字投保单状态
+     */
+    @SaCheckPermission("insurance:insuranceProxyOrder:query")
+    @GetMapping("/{id}/applicationForm")
+    public R<Map<String, Object>> applicationForm(@NotNull(message = "主键不能为空") @PathVariable Long id) {
+        return R.ok(insuranceApplicationFormService.platformStatus(id));
+    }
+
+    /**
+     * 预览或下载代投保订单的已归档投保单
+     */
+    @SaCheckPermission("insurance:insuranceProxyOrder:query")
+    @Log(title = "代投保订单投保单下载", businessType = BusinessType.EXPORT)
+    @GetMapping("/{id}/applicationForm/pdf")
+    public void applicationFormPdf(@NotNull(message = "主键不能为空") @PathVariable Long id,
+                                   @RequestParam(defaultValue = "false") boolean inline,
+                                   HttpServletResponse response) throws IOException {
+        InsuranceApplicationFormService.PlatformPdf file = insuranceApplicationFormService.platformPdf(id);
+        response.setContentType("application/pdf");
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Content-Disposition", (inline ? "inline" : "attachment")
+            + "; filename*=UTF-8''" + URLEncoder.encode(file.orderNo() + "_投保单.pdf", StandardCharsets.UTF_8).replace("+", "%20"));
+        response.setContentLength(file.bytes().length);
+        response.getOutputStream().write(file.bytes());
     }
 
     /**

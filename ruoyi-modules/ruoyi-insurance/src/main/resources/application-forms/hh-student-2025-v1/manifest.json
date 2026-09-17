@@ -1,0 +1,633 @@
+{
+  "templates": [
+    {
+      "code": "hh-student-2025",
+      "version": "v1",
+      "name": "黄河 - 方案一（50元）- 学生、幼儿意外伤害保险投保单",
+      "baseResource": "base-final.pdf",
+      "sourceResource": "template.docx",
+      "templateHash": "fc0f644ba12f7138a2520b30bffda5f90003730ab2d5518c5b4dc38b3b3257c1",
+      "premium": 50,
+      "allowanceDaily": 60,
+      "insuranceMonths": 12,
+      "offsets": {
+        "placementX": {
+          "signatureDate": 12
+        }
+      }
+    },
+    {
+      "code": "hh-student-2025-plan2",
+      "version": "v1",
+      "name": "黄河 - 方案二（60元）- 学生、幼儿意外伤害保险投保单",
+      "baseResource": "base-60.pdf",
+      "sourceResource": "template-60.docx",
+      "templateHash": "f01762181f66fe9602e3ee128aed3962f9c2f522c9b5773bb8d496eede02d38a",
+      "premium": 60,
+      "allowanceDaily": 100,
+      "insuranceMonths": 12,
+      "offsets": {
+        "placementX": {
+          "signatureDate": 16
+        },
+        "checkX": {
+          "applicantHousehold": -9,
+          "insuredHousehold": -9
+        },
+        "placements": {
+          "signatureDate": -36.4
+        },
+        "signatures": {
+          "applicant": -36.4,
+          "insured": -36.4
+        }
+      }
+    },
+    {
+      "code": "hh-student-2025-plan3",
+      "version": "v1",
+      "name": "黄河 - 方案三（90元）- 学生、幼儿意外伤害保险投保单",
+      "baseResource": "base-90.pdf",
+      "sourceResource": "template-90.docx",
+      "templateHash": "9748fedcc7dddaaccc38c1fd8775c624008655eb50feca74dc1dcacb342dff38",
+      "premium": 90,
+      "allowanceDaily": 100,
+      "insuranceMonths": 12,
+      "offsets": {
+        "placementX": {
+          "signatureDate": 12
+        },
+        "placements": {
+          "insurancePeriod": -10.1,
+          "signatureDate": -36.4
+        },
+        "checks": {
+          "medicalInsurance": -10.1
+        },
+        "signatures": {
+          "applicant": -36.4,
+          "insured": -36.4
+        }
+      }
+    }
+  ],
+  "pageCount": 18,
+  "fields": [
+    {
+      "key": "applicantPostcode",
+      "label": "投保人邮政编码",
+      "type": "digit",
+      "required": true
+    },
+    {
+      "key": "applicantHousehold",
+      "label": "投保人户口类型",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "农业户口",
+          "value": "农业户口"
+        },
+        {
+          "label": "城镇户口",
+          "value": "城镇户口"
+        }
+      ]
+    },
+    {
+      "key": "insuredBirthday",
+      "label": "被保险人出生日期",
+      "type": "date",
+      "required": true
+    },
+    {
+      "key": "insuredGender",
+      "label": "被保险人性别",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "男",
+          "value": "男"
+        },
+        {
+          "label": "女",
+          "value": "女"
+        }
+      ]
+    },
+    {
+      "key": "insuredPostcode",
+      "label": "被保险人邮政编码",
+      "type": "digit",
+      "required": true
+    },
+    {
+      "key": "insuredHousehold",
+      "label": "被保险人户口类型",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "农业户口",
+          "value": "农业户口"
+        },
+        {
+          "label": "城镇户口",
+          "value": "城镇户口"
+        }
+      ]
+    },
+    {
+      "key": "studentType",
+      "label": "学生类别",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "幼儿生",
+          "value": "幼儿生"
+        },
+        {
+          "label": "小学生",
+          "value": "小学生"
+        },
+        {
+          "label": "中学生",
+          "value": "中学生"
+        },
+        {
+          "label": "大中专学生",
+          "value": "大中专学生"
+        },
+        {
+          "label": "其他",
+          "value": "其他"
+        }
+      ]
+    },
+    {
+      "key": "schoolType",
+      "label": "学校类别",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "全日制（住宿）",
+          "value": "全日制（住宿）"
+        },
+        {
+          "label": "全日制（走读）",
+          "value": "全日制（走读）"
+        },
+        {
+          "label": "非全日制",
+          "value": "非全日制"
+        }
+      ]
+    },
+    {
+      "key": "schoolName",
+      "label": "学校名称",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "schoolClass",
+      "label": "班级",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "medicalInsurance",
+      "label": "基本医疗/公费医疗保险且正常缴费",
+      "type": "select",
+      "required": true,
+      "options": [
+        {
+          "label": "有",
+          "value": "有"
+        },
+        {
+          "label": "无",
+          "value": "无"
+        }
+      ]
+    }
+  ],
+  "statements": [
+    {
+      "key": "special",
+      "title": "特别约定确认",
+      "content": [
+        "1. 本保险由黄河财产保险股份有限公司承保，保险期间内，本保险合同每个被保险人限投1份，多投无效。",
+        "2. 承保年龄：6-25周岁（含），本方案不承保在特殊儿童学校和武术体育学校的学生。",
+        "3. 根据《中华人民共和国保险法》及有关法律法规的规定，如为未成年人（18周岁以下）投保以死亡为保险金给付条件的保险，投保人须为未成年人的父母，且保险金额不得超过以下金额：被保险人不满10周岁的，死亡保险金额不超过人民币20万元；被保险人已满10周岁但未满18周岁的，死亡保险金额不超过人民币50万元。本公司对于超出中国保监会规定的限额的保险金额不承担保险责任。",
+        "4. 动物抓（咬）伤：凭被保险人注射的狂犬疫苗、抗狂犬病血清、抗狂犬病免疫球蛋白等类似发票，每年每次给付限额为1000元。",
+        "5. 附加意外伤害医疗费用保险，每次事故免赔额为100元，给付比例100%。",
+        "6. 附加住院医疗保险疾病住院等待期为30天，续、转保客户如上年保单中包含同种疾病类保障内容不受30日规定的限制。附加住院医疗保险，票据经医保结算的，每次事故免赔额为100元，给付比例90%；票据未经医保结算的，每次事故免赔额为100元，给付比例60%。",
+        "7. 附加意外住院津贴保险每次事故免赔0天，给付标准为60元/人/天，单次给付天数最高不超过30天，累计给付天数最高不超过180天。",
+        "投保人声明：投保人填写本投保单之前，投保人和保险人已就上述特别约定内容协商一致，投保人已完全了解，并同意上述各项特别约定内容。"
+      ]
+    },
+    {
+      "key": "applicant",
+      "title": "投保人声明",
+      "content": [
+        "1. 投保人填写本投保单之前，保险人已经就本投保单及后附的保险条款的内容，尤其是关于免除保险人责任的条款、投保人和被保险人义务条款、特别约定内容向投保人作了明确说明，投保人对该保险条款及各项保险条件（包括但不限于特别约定内容）已完全了解，并同意接受保险条款及各项保险条件（包括但不限于特别约定内容）的约束。",
+        "2. 本投保单所填各项内容均属事实，同意以本投保单作为保险人签发保险单的依据。",
+        "3. 投保人及被保险人同意保险人自行或委托第三方机构以本保险为目的收集本人及被保险人的个人资料，并同意上述资料可由保险人或委托的第三方机构用于本保险的投保审核、提供与本保险有关的服务及与本人联络的用途。"
+      ]
+    },
+    {
+      "key": "insured",
+      "title": "被保险人或法定监护人声明",
+      "content": [
+        "1. 投保人填写本投保单之前，保险人已经就本投保单及后附的保险条款的内容，尤其是关于免除保险人责任的条款、投保人和被保险人义务条款、特别约定内容向投保人作了明确说明，投保人对该保险条款及各项保险条件（包括但不限于特别约定内容）已完全了解，并同意接受保险条款及各项保险条件（包括但不限于特别约定内容）的约束。",
+        "2. 本投保单所填各项内容均属事实，同意以本投保单作为保险人签发保险单的依据。",
+        "3. 投保人及被保险人同意保险人自行或委托第三方机构以本保险为目的收集本人及被保险人的个人资料，并同意上述资料可由保险人或委托的第三方机构用于本保险的投保审核、提供与本保险有关的服务及与本人联络的用途。"
+      ]
+    }
+  ],
+  "placements": [
+    {
+      "key": "applicantName",
+      "page": 0,
+      "x": 137.9,
+      "y": 295.61,
+      "width": 221.33,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "applicantPhone",
+      "page": 0,
+      "x": 413.71,
+      "y": 295.61,
+      "width": 142.46,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "applicantAddress",
+      "page": 0,
+      "x": 137.9,
+      "y": 316.01,
+      "width": 221.33,
+      "height": 19.8,
+      "fontSize": 9
+    },
+    {
+      "key": "applicantPostcode",
+      "page": 0,
+      "x": 413.71,
+      "y": 316.01,
+      "width": 142.46,
+      "height": 19.8,
+      "fontSize": 9
+    },
+    {
+      "key": "applicantCertNo",
+      "page": 0,
+      "x": 413.71,
+      "y": 336.29,
+      "width": 142.46,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredName",
+      "page": 0,
+      "x": 137.9,
+      "y": 388.37,
+      "width": 221.33,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredPhone",
+      "page": 0,
+      "x": 413.71,
+      "y": 388.37,
+      "width": 142.46,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredBirthday",
+      "page": 0,
+      "x": 137.9,
+      "y": 408.77,
+      "width": 221.33,
+      "height": 19.8,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredAddress",
+      "page": 0,
+      "x": 137.9,
+      "y": 429.05,
+      "width": 221.33,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredPostcode",
+      "page": 0,
+      "x": 413.71,
+      "y": 429.05,
+      "width": 142.46,
+      "height": 19.92,
+      "fontSize": 9
+    },
+    {
+      "key": "insuredCertNo",
+      "page": 0,
+      "x": 413.71,
+      "y": 449.45,
+      "width": 142.46,
+      "height": 19.82,
+      "fontSize": 9
+    },
+    {
+      "key": "beneficiary",
+      "page": 0,
+      "x": 413.71,
+      "y": 469.75,
+      "width": 142.46,
+      "height": 19.92,
+      "fontSize": 9,
+      "mask": true
+    },
+    {
+      "key": "schoolName",
+      "page": 0,
+      "x": 462.22,
+      "y": 604.63,
+      "width": 93.96,
+      "height": 23.28,
+      "fontSize": 9
+    },
+    {
+      "key": "schoolClass",
+      "page": 0,
+      "x": 462.22,
+      "y": 628.39,
+      "width": 93.96,
+      "height": 17.04,
+      "fontSize": 9
+    },
+    {
+      "key": "insurancePeriod",
+      "page": 1,
+      "x": 87.02,
+      "y": 271.94,
+      "width": 469.16,
+      "height": 19.83,
+      "fontSize": 9,
+      "mask": true
+    },
+    {
+      "key": "signatureDate",
+      "page": 2,
+    "x": 88.82,
+    "y": 260,
+    "width": 130,
+      "height": 14,
+      "fontSize": 9,
+      "mask": true
+    },
+    {
+      "key": "signatureDate",
+      "page": 2,
+    "x": 379.39,
+    "y": 260,
+    "width": 148,
+      "height": 14,
+      "fontSize": 9,
+      "mask": true
+    }
+  ],
+  "checks": [
+    {
+      "key": "applicantCertTypeLabel",
+      "value": "身份证",
+      "page": 0,
+      "x": 137.9,
+      "y": 342
+    },
+    {
+      "key": "applicantCertTypeLabel",
+      "value": "护照",
+      "page": 0,
+      "x": 183,
+      "y": 342
+    },
+    {
+      "key": "applicantCertTypeLabel",
+      "value": "其他",
+      "page": 0,
+      "x": 219,
+      "y": 342
+    },
+    {
+      "key": "insuredCertTypeLabel",
+      "value": "身份证",
+      "page": 0,
+      "x": 137.9,
+      "y": 455
+    },
+    {
+      "key": "insuredCertTypeLabel",
+      "value": "护照",
+      "page": 0,
+      "x": 178.5,
+      "y": 455
+    },
+    {
+      "key": "insuredCertTypeLabel",
+      "value": "其他",
+      "page": 0,
+      "x": 210,
+      "y": 455
+    },
+    {
+      "key": "applicantHousehold",
+      "value": "农业户口",
+      "page": 0,
+      "x": 137.9,
+      "y": 368
+    },
+    {
+      "key": "applicantHousehold",
+      "value": "城镇户口",
+      "page": 0,
+      "x": 192,
+      "y": 368
+    },
+    {
+      "key": "insuredHousehold",
+      "value": "农业户口",
+      "page": 0,
+      "x": 137.9,
+      "y": 476
+    },
+    {
+      "key": "insuredHousehold",
+      "value": "城镇户口",
+      "page": 0,
+      "x": 192,
+      "y": 476
+    },
+    {
+      "key": "relationLabel",
+      "value": "本人",
+      "page": 0,
+      "x": 413.7,
+      "y": 361
+    },
+    {
+      "key": "relationLabel",
+      "value": "配偶",
+      "page": 0,
+      "x": 452,
+      "y": 361
+    },
+    {
+      "key": "relationLabel",
+      "value": "父母",
+      "page": 0,
+      "x": 490.3,
+      "y": 361
+    },
+    {
+      "key": "relationLabel",
+      "value": "子女",
+      "page": 0,
+      "x": 528.5,
+      "y": 361
+    },
+    {
+      "key": "relationLabel",
+      "value": "其他",
+      "page": 0,
+      "x": 431.8,
+      "y": 376.5
+    },
+    {
+      "key": "insuredGender",
+      "value": "男",
+      "page": 0,
+      "x": 413.7,
+      "y": 415
+    },
+    {
+      "key": "insuredGender",
+      "value": "女",
+      "page": 0,
+      "x": 445.5,
+      "y": 415
+    },
+    {
+      "key": "studentType",
+      "value": "幼儿生",
+      "page": 0,
+      "x": 39.1,
+      "y": 615
+    },
+    {
+      "key": "studentType",
+      "value": "小学生",
+      "page": 0,
+      "x": 84.3,
+      "y": 615
+    },
+    {
+      "key": "studentType",
+      "value": "中学生",
+      "page": 0,
+      "x": 129.3,
+      "y": 615
+    },
+    {
+      "key": "studentType",
+      "value": "大中专学生",
+      "page": 0,
+      "x": 39.1,
+      "y": 627
+    },
+    {
+      "key": "studentType",
+      "value": "其他",
+      "page": 0,
+      "x": 115.8,
+      "y": 627
+    },
+    {
+      "key": "schoolType",
+      "value": "全日制（住宿）",
+      "page": 0,
+      "x": 237.5,
+      "y": 609
+    },
+    {
+      "key": "schoolType",
+      "value": "全日制（走读）",
+      "page": 0,
+      "x": 237.5,
+      "y": 621
+    },
+    {
+      "key": "schoolType",
+      "value": "非全日制",
+      "page": 0,
+      "x": 237.5,
+      "y": 633
+    },
+    {
+      "key": "medicalInsurance",
+      "value": "有",
+      "page": 1,
+      "x": 479,
+      "y": 413.5,
+      "xOffset": 1.5
+    },
+    {
+      "key": "medicalInsurance",
+      "value": "无",
+      "page": 1,
+      "x": 510.5,
+      "y": 413.5,
+      "xOffset": 1.5
+    }
+  ],
+  "signatures": [
+    {
+      "key": "special",
+      "page": 1,
+      "x": 428,
+      "y": 710,
+      "width": 110,
+      "height": 50
+    },
+    {
+      "key": "applicant",
+      "page": 2,
+      "x": 142,
+      "y": 226,
+      "width": 85,
+      "height": 36
+    },
+    {
+      "key": "insured",
+      "page": 2,
+      "x": 477,
+      "y": 226,
+      "width": 75,
+      "height": 36
+    }
+  ],
+  "fontFamily": "SimSun",
+  "fontResource": "SimSun.ttc"
+}

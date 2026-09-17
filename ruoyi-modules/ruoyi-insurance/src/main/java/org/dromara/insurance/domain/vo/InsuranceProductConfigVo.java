@@ -176,4 +176,11 @@ public class InsuranceProductConfigVo implements Serializable {
      * 运费金额
      */
     private BigDecimal freight;
+
+    /** 是否启用签字投保单，仅卡单代投保。 */
+    private Boolean applicationFormRequired;
+    private String applicationTemplateCode;
+    private String applicationTemplateVersion;
+
+    public boolean getBatchAllowed() { return !Boolean.TRUE.equals(applicationFormRequired); }
 }

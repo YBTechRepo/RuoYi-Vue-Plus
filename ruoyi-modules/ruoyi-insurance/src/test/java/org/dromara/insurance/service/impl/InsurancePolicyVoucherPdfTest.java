@@ -45,6 +45,7 @@ class InsurancePolicyVoucherPdfTest {
     @BeforeEach
     void setUp() {
         service = new InsuranceApplyRecordServiceImpl(
+            null,
             applyRecordMapper,
             null,
             null,

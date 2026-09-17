@@ -304,5 +304,7 @@ public class InsuranceApplyRecordVo implements Serializable {
     @ExcelProperty(value = "被保人地址")
     private String insuredAddress;
 
-}
 
+    private Boolean applicationFormRequired;
+    private String applicationFormStatus;
+}

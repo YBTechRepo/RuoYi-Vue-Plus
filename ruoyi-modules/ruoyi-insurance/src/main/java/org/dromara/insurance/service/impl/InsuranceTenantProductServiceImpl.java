@@ -94,6 +94,9 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setProductName(baseInfo.getProductName());
                 vo.setProductType(baseInfo.getProductType());
                 vo.setProductMode(baseInfo.getProductMode());
+                vo.setApplicationFormRequired(baseInfo.getApplicationFormRequired());
+                vo.setApplicationTemplateCode(baseInfo.getApplicationTemplateCode());
+                vo.setApplicationTemplateVersion(baseInfo.getApplicationTemplateVersion());
                 vo.setInsureMode(baseInfo.getInsureMode());
                 vo.setPaymentMode(baseInfo.getPaymentMode());
                 vo.setMinPremium(baseInfo.getMinPremium());
@@ -239,6 +242,9 @@ public class InsuranceTenantProductServiceImpl implements IInsuranceTenantProduc
                 vo.setProductName(baseInfo.getProductName()); // 缝合名字
                 vo.setProductType(baseInfo.getProductType());
                 vo.setProductMode(baseInfo.getProductMode());
+                vo.setApplicationFormRequired(baseInfo.getApplicationFormRequired());
+                vo.setApplicationTemplateCode(baseInfo.getApplicationTemplateCode());
+                vo.setApplicationTemplateVersion(baseInfo.getApplicationTemplateVersion());
                 vo.setInsureMode(baseInfo.getInsureMode());
                 vo.setPaymentMode(baseInfo.getPaymentMode());
                 vo.setMinPremium(baseInfo.getMinPremium());
