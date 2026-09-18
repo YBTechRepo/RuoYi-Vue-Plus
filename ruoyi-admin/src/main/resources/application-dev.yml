@@ -275,6 +275,10 @@ justauth:
       redirect-uri: ${justauth.address}/social-callback?source=gitea
 
 insurance:
+  application-form:
+    public-sign-url: http://kd.yubaokeji.com/mobile/insurance/public-sign
+#    public-sign-url: ${INSURANCE_PUBLIC_SIGN_URL:}
+
   openapi:
     appCode: a5cce81b7c70432f
     publicKey: MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCcSWR7XHPRcqmjfW9jdkyZPTek+F5VEv8tUo8+8FA9fhegz5kwWNy0X+muwNYGl3VBokhjFMcnccSA9Fxizh64Y1iqfNvd/AMXVOHpfgqBs3Um87auNEN0UY9GIK00ks4A7xYl4CGE7o0cTyg75goji2Gy8lSX0rKYe33IH4dAnQIDAQAB

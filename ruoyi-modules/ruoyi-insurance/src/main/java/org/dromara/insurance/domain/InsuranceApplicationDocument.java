@@ -17,7 +17,7 @@ public class InsuranceApplicationDocument extends TenantEntity {
     private String templateHash;
     private String snapshotJson;
     private String snapshotHash;
-    /** DRAFT / GENERATING / READY / FAILED / INVALID */
+    /** DRAFT / PARTIAL / GENERATING / READY / FAILED / INVALID */
     private String status;
     private String signatureJson;
     private Date signedTime;

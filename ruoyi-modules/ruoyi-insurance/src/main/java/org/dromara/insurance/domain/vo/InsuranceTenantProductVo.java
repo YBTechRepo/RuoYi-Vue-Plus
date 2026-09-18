@@ -167,5 +167,6 @@ public class InsuranceTenantProductVo implements Serializable {
     private String applicationTemplateCode;
     private String applicationTemplateVersion;
 
-    public boolean getBatchAllowed() { return !Boolean.TRUE.equals(applicationFormRequired); }
+    public boolean getBatchAllowed() { return true; }
+    public String getBatchTemplateMode() { return Boolean.TRUE.equals(applicationFormRequired) ? "SIGNED_APPLICATION" : "STANDARD"; }
 }

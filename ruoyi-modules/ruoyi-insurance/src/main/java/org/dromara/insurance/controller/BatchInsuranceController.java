@@ -2,6 +2,7 @@ package org.dromara.insurance.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.IdcardUtil;
 import cn.idev.excel.FastExcel;
 import cn.idev.excel.context.AnalysisContext;
 import cn.idev.excel.event.AnalysisEventListener;
@@ -25,10 +26,14 @@ import org.dromara.finance.service.IBizUserAccountService;
 import org.dromara.insurance.domain.bo.InsuranceProductSaveBo;
 import org.dromara.insurance.domain.dto.BatchInsuredImportDto;
 import org.dromara.insurance.domain.dto.BatchSubmitDTO;
+import org.dromara.insurance.domain.dto.SignedBatchInsuredImportDto;
 import org.dromara.insurance.domain.vo.BatchPreviewVO;
 import org.dromara.insurance.domain.vo.InsuranceSalesProductVo;
 import org.dromara.insurance.service.IInsuranceApplyRecordService;
 import org.dromara.insurance.service.IInsuranceProductConfigService;
+import org.dromara.insurance.service.ApplicationFormTemplate;
+import org.dromara.insurance.service.SignedBatchInsuranceService;
+import org.dromara.insurance.service.SignedBatchTemplateDescriptor;
 import org.dromara.insurance.utils.DynamicInsureFieldUtils;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
@@ -37,6 +42,7 @@ import org.apache.poi.ss.usermodel.Name;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFDataValidation;
@@ -44,6 +50,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URLEncoder;
@@ -68,6 +75,12 @@ public class BatchInsuranceController {
 
     private final DictService dictService;
 
+    private final SignedBatchTemplateDescriptor signedTemplateDescriptor;
+
+    private final SignedBatchInsuranceService signedBatchInsuranceService;
+
+    private final ApplicationFormTemplate applicationFormTemplate;
+
     /**
      * 导入并预解析投保人员名单 (前置审查)
      */
@@ -76,10 +89,36 @@ public class BatchInsuranceController {
     @PostMapping("/importData")
     public R<Map<String, Object>> importData(@RequestParam("productId") Long productId,
                                              @RequestPart("file") MultipartFile file) throws IOException {
-        applicationFormGuard.assertBatchAllowed(productId);
+        boolean signedMode = isSignedProduct(productId);
+        byte[] workbookBytes = file.getBytes();
+        Map<String, String> uploadedMetadata = readTemplateMetadata(workbookBytes);
+        if (!signedMode) {
+            if (SignedBatchTemplateDescriptor.MODE.equals(uploadedMetadata.get("templateMode"))) {
+                return R.fail("该产品使用普通批量模板，请重新下载该产品的普通模板");
+            }
+            return importNormal(workbookBytes, productId);
+        }
+
+        SignedBatchTemplateDescriptor.Descriptor descriptor = signedTemplateDescriptor.describe(productId);
+        validateSignedTemplateMetadata(uploadedMetadata, descriptor);
+        SignedBatchRawImportListener listener = new SignedBatchRawImportListener(
+            descriptor.getApplicationFields(), descriptor.getDynamicFields(), dictService, applicationFormTemplate);
+        FastExcel.read(new ByteArrayInputStream(workbookBytes), listener).headRowNumber(2).sheet("人员清单").doRead();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("templateMode", SignedBatchTemplateDescriptor.MODE);
+        result.put("templateVersion", SignedBatchTemplateDescriptor.VERSION);
+        result.put("schemaHash", descriptor.getSchemaHash());
+        result.put("validCount", listener.getValidCount());
+        result.put("invalidCount", listener.getInvalidCount());
+        result.put("auditList", listener.getResultList());
+        return R.ok("解析完成", result);
+    }
+
+    private R<Map<String, Object>> importNormal(byte[] workbookBytes, Long productId) {
         List<DynamicInsureFieldUtils.Field> dynamicFields = queryDynamicFields(productId);
         BatchRawImportListener listener = new BatchRawImportListener(dynamicFields, dictService);
-        FastExcel.read(file.getInputStream(), listener).headRowNumber(0).sheet().doRead();
+        FastExcel.read(new ByteArrayInputStream(workbookBytes), listener).headRowNumber(0).sheet().doRead();
 
         Map<String, Object> result = new HashMap<>();
         result.put("validCount", listener.getValidCount());
@@ -94,6 +133,10 @@ public class BatchInsuranceController {
     @SaCheckLogin
     @GetMapping("/template")
     public void template(@RequestParam("productId") Long productId, HttpServletResponse response) throws IOException {
+        if (isSignedProduct(productId)) {
+            writeSignedTemplate(productId, response);
+            return;
+        }
         List<String> fixedHeads = Arrays.asList(
             "投保人姓名",
             "投保人证件类型",
@@ -107,7 +150,6 @@ public class BatchInsuranceController {
             "被保人手机号",
             "被保人地址"
         );
-        applicationFormGuard.assertBatchAllowed(productId);
         List<DynamicInsureFieldUtils.Field> dynamicFields = queryDynamicFields(productId);
         String fileName = URLEncoder.encode("人员清单导入模板.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -116,7 +158,7 @@ public class BatchInsuranceController {
         FastExcel.write(response.getOutputStream())
             .head(DynamicInsureFieldUtils.buildHead(fixedHeads, dynamicFields))
             .autoCloseStream(false)
-            .registerWriteHandler(new BatchTemplateDropDownHandler(buildDropDownOptions(dynamicFields)))
+            .registerWriteHandler(new BatchTemplateDropDownHandler(buildDropDownOptions(dynamicFields), 1, null))
             .sheet("人员清单")
             .doWrite(Collections.emptyList());
     }
@@ -128,18 +170,24 @@ public class BatchInsuranceController {
     @RepeatSubmit()
     @PostMapping("/preview")
     public R<BatchPreviewVO> preview(@RequestBody BatchSubmitDTO batchSubmitDTO) {
-        applicationFormGuard.assertBatchAllowed(batchSubmitDTO.getProductId());
+        if (isSignedProduct(batchSubmitDTO.getProductId())) {
+            signedBatchInsuranceService.validateSubmission(batchSubmitDTO);
+        } else {
+            applicationFormGuard.assertBatchAllowed(batchSubmitDTO.getProductId());
+        }
         log.info("批量投保计算-请求参数：{}", JsonUtils.toJsonString(batchSubmitDTO));
 
         // 1. 参数校验
-        if (batchSubmitDTO.getAuditList() == null) {
+        int validCount = isSignedProduct(batchSubmitDTO.getProductId())
+            ? batchSubmitDTO.getSignedAuditList().size()
+            : batchSubmitDTO.getAuditList() == null ? 0 : batchSubmitDTO.getAuditList().size();
+        if (validCount == 0) {
             return R.fail("投保人员名单不能为空");
         }
         String policyStartDateError = validatePolicyStartDate(batchSubmitDTO.getPolicyStartDate());
         if (StringUtils.isNotBlank(policyStartDateError)) {
             return R.fail(policyStartDateError);
         }
-        int validCount = batchSubmitDTO.getAuditList().size();
         log.info("批量投保计算-人数：{}", validCount);
 
         // 2. 获取产品信息
@@ -190,10 +238,133 @@ public class BatchInsuranceController {
     @PostMapping("/submit")
     @RepeatSubmit()
     public R<Map<String, String>> submit(@RequestBody BatchSubmitDTO batchSubmitDTO) {
-        String batchOrderNo = insuranceApplyRecordService.submitBatch(batchSubmitDTO);
+        boolean signedMode = isSignedProduct(batchSubmitDTO.getProductId());
+        String batchOrderNo = signedMode
+            ? signedBatchInsuranceService.createPendingBatch(batchSubmitDTO)
+            : insuranceApplyRecordService.submitBatch(batchSubmitDTO);
         Map<String, String> result = new HashMap<>();
         result.put("batchOrderNo", batchOrderNo);
-        return R.ok("出单成功", result);
+        return R.ok(signedMode ? "待签批次创建成功" : "出单成功", result);
+    }
+
+    @SaCheckLogin
+    @GetMapping("/{batchOrderNo}/signing")
+    public R<?> signing(@PathVariable String batchOrderNo) {
+        return R.ok(signedBatchInsuranceService.progress(batchOrderNo));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/{batchOrderNo}/invites/{inviteId}/link")
+    public R<?> issueSigningLink(@PathVariable String batchOrderNo, @PathVariable Long inviteId) {
+        return R.ok(signedBatchInsuranceService.issueLink(batchOrderNo, inviteId));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/{batchOrderNo}/links")
+    public R<?> issueAllSigningLinks(@PathVariable String batchOrderNo) {
+        return R.ok(signedBatchInsuranceService.issueAllLinks(batchOrderNo));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/{batchOrderNo}/pay")
+    @RepeatSubmit()
+    public R<?> pay(@PathVariable String batchOrderNo) {
+        signedBatchInsuranceService.pay(batchOrderNo);
+        return R.ok("整批扣款成功");
+    }
+
+    private boolean isSignedProduct(Long productId) {
+        if (productId == null) throw new org.dromara.common.core.exception.ServiceException("产品不能为空");
+        var product = applicationFormGuard.product(productId);
+        if (product == null) throw new org.dromara.common.core.exception.ServiceException("产品不存在");
+        return Boolean.TRUE.equals(product.getApplicationFormRequired());
+    }
+
+    private void writeSignedTemplate(Long productId, HttpServletResponse response) throws IOException {
+        SignedBatchTemplateDescriptor.Descriptor descriptor = signedTemplateDescriptor.describe(productId);
+        String fileName = URLEncoder.encode("签字投保单人员清单导入模板.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+        FastExcel.write(response.getOutputStream())
+            .head(buildSignedHead(descriptor))
+            .autoCloseStream(false)
+            .registerWriteHandler(new BatchTemplateDropDownHandler(
+                buildSignedDropDownOptions(descriptor), 2, descriptor.metadata()))
+            .sheet("人员清单")
+            .doWrite(Collections.emptyList());
+    }
+
+    private List<List<String>> buildSignedHead(SignedBatchTemplateDescriptor.Descriptor descriptor) {
+        List<List<String>> head = new ArrayList<>();
+        for (String label : List.of("姓名*", "证件类型*", "证件号码*", "证件生效期*", "证件到期日*", "手机号码*", "所在地区*", "详细地址*")) {
+            head.add(List.of("投保人信息", label));
+        }
+        for (String label : List.of("与投保人关系*", "姓名", "证件类型", "证件号码", "证件生效期", "证件到期日", "手机号码", "所在地区", "详细地址")) {
+            head.add(List.of("被保险人信息", label));
+        }
+        for (SignedBatchTemplateDescriptor.ApplicationField field : descriptor.getApplicationFields()) {
+            head.add(List.of("投保单补充资料", field.label() + (field.required() ? "*" : "")));
+        }
+        for (DynamicInsureFieldUtils.Field field : descriptor.getDynamicFields()) {
+            if ("address".equals(field.getType())) {
+                head.add(List.of("产品扩展字段", DynamicInsureFieldUtils.headerLabel(field, "地区")));
+                head.add(List.of("产品扩展字段", DynamicInsureFieldUtils.headerLabel(field, "详细地址")));
+            } else {
+                head.add(List.of("产品扩展字段", DynamicInsureFieldUtils.headerLabel(field, null)));
+            }
+        }
+        return head;
+    }
+
+    private Map<Integer, List<String>> buildSignedDropDownOptions(SignedBatchTemplateDescriptor.Descriptor descriptor) {
+        Map<Integer, List<String>> options = new LinkedHashMap<>();
+        List<String> idTypes = dictOptions("insurance_id_type");
+        options.put(1, idTypes);
+        options.put(8, dictOptions("insurance_relationship_to_insured"));
+        options.put(10, idTypes);
+        int col = 17;
+        for (SignedBatchTemplateDescriptor.ApplicationField field : descriptor.getApplicationFields()) {
+            if (!field.options().isEmpty()) options.put(col, field.options());
+            col++;
+        }
+        for (DynamicInsureFieldUtils.Field field : descriptor.getDynamicFields()) {
+            if ("address".equals(field.getType())) {
+                col += 2;
+            } else {
+                if (isOptionField(field)) {
+                    List<String> labels = DynamicInsureFieldUtils.optionLabels(field);
+                    if (!labels.isEmpty()) options.put(col, labels);
+                }
+                col++;
+            }
+        }
+        return options;
+    }
+
+    private Map<String, String> readTemplateMetadata(byte[] bytes) throws IOException {
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet(SignedBatchTemplateDescriptor.META_SHEET);
+            if (sheet == null) return Collections.emptyMap();
+            Map<String, String> values = new LinkedHashMap<>();
+            for (Row row : sheet) {
+                if (row.getCell(0) != null && row.getCell(1) != null) {
+                    values.put(row.getCell(0).getStringCellValue(), row.getCell(1).getStringCellValue());
+                }
+            }
+            return values;
+        }
+    }
+
+    private void validateSignedTemplateMetadata(Map<String, String> metadata,
+                                                SignedBatchTemplateDescriptor.Descriptor descriptor) {
+        if (!SignedBatchTemplateDescriptor.MODE.equals(metadata.get("templateMode"))) {
+            throw new org.dromara.common.core.exception.ServiceException("该产品需要签字投保单资料，请重新下载签字产品专用模板");
+        }
+        if (!SignedBatchTemplateDescriptor.VERSION.equals(metadata.get("templateVersion"))
+            || !descriptor.getSchemaHash().equals(metadata.get("schemaHash"))) {
+            throw new org.dromara.common.core.exception.ServiceException("批量模板版本或字段配置已变化，请重新下载模板");
+        }
     }
 
     private List<DynamicInsureFieldUtils.Field> queryDynamicFields(Long productId) {
@@ -386,23 +557,231 @@ public class BatchInsuranceController {
         }
     }
 
+    private static class SignedBatchRawImportListener extends AnalysisEventListener<Map<Integer, String>> {
+        private static final String DATE_PATTERN = "yyyy-MM-dd";
+        private static final java.util.regex.Pattern PHONE = java.util.regex.Pattern.compile("^1[3-9]\\d{9}$");
+        private final List<SignedBatchTemplateDescriptor.ApplicationField> applicationFields;
+        private final List<DynamicInsureFieldUtils.Field> dynamicFields;
+        private final DictService dictService;
+        private final ApplicationFormTemplate applicationFormTemplate;
+        private final List<SignedBatchInsuredImportDto> resultList = new ArrayList<>();
+        private int validCount;
+        private int invalidCount;
+
+        SignedBatchRawImportListener(List<SignedBatchTemplateDescriptor.ApplicationField> applicationFields,
+                                     List<DynamicInsureFieldUtils.Field> dynamicFields,
+                                     DictService dictService,
+                                     ApplicationFormTemplate applicationFormTemplate) {
+            this.applicationFields = applicationFields;
+            this.dynamicFields = dynamicFields;
+            this.dictService = dictService;
+            this.applicationFormTemplate = applicationFormTemplate;
+        }
+
+        @Override
+        public void invoke(Map<Integer, String> row, AnalysisContext context) {
+            if (isEmptyRow(row)) return;
+            SignedBatchInsuredImportDto dto = buildDto(row);
+            validateDto(dto);
+            resultList.add(dto);
+        }
+
+        @Override
+        public void doAfterAllAnalysed(AnalysisContext context) {
+            log.info("签字产品批量投保 Excel 解析完成，共 [{}] 条，成功 [{}] 条，失败 [{}] 条",
+                resultList.size(), validCount, invalidCount);
+        }
+
+        private SignedBatchInsuredImportDto buildDto(Map<Integer, String> row) {
+            SignedBatchInsuredImportDto dto = new SignedBatchInsuredImportDto();
+            dto.setAppName(cell(row, 0));
+            dto.setAppCertType(normalizeDictValue("insurance_id_type", cell(row, 1)));
+            dto.setAppCertNo(cell(row, 2));
+            dto.setAppCertStartDate(cell(row, 3));
+            dto.setAppCertEndDate(cell(row, 4));
+            dto.setAppPhone(cell(row, 5));
+            dto.setAppRegion(cell(row, 6));
+            dto.setAppAddress(cell(row, 7));
+            dto.setRelation(normalizeDictValue("insurance_relationship_to_insured", cell(row, 8)));
+            dto.setName(cell(row, 9));
+            dto.setCertType(normalizeDictValue("insurance_id_type", cell(row, 10)));
+            dto.setCertNo(cell(row, 11));
+            dto.setCertStartDate(cell(row, 12));
+            dto.setCertEndDate(cell(row, 13));
+            dto.setPhone(cell(row, 14));
+            dto.setRegion(cell(row, 15));
+            dto.setAddress(cell(row, 16));
+
+            int col = 17;
+            for (SignedBatchTemplateDescriptor.ApplicationField field : applicationFields) {
+                dto.getApplicationForm().put(field.key(), normalizeApplicationValue(field, cell(row, col++)));
+            }
+            for (DynamicInsureFieldUtils.Field field : dynamicFields) {
+                if ("address".equals(field.getType())) {
+                    dto.getExtraData().put(field.getKey(),
+                        DynamicInsureFieldUtils.normalizeImportValue(field, cell(row, col), cell(row, col + 1)));
+                    col += 2;
+                } else {
+                    dto.getExtraData().put(field.getKey(),
+                        DynamicInsureFieldUtils.normalizeImportValue(field, cell(row, col), null));
+                    col++;
+                }
+            }
+            copyApplicantWhenSelf(dto);
+            deriveIdentityValues(dto);
+            return dto;
+        }
+
+        private void validateDto(SignedBatchInsuredImportDto dto) {
+            required(dto, "appName", dto.getAppName(), "投保人姓名不能为空");
+            required(dto, "appCertType", dto.getAppCertType(), "投保人证件类型不能为空");
+            required(dto, "appCertNo", dto.getAppCertNo(), "投保人证件号码不能为空");
+            required(dto, "appPhone", dto.getAppPhone(), "投保人手机号码不能为空");
+            required(dto, "appRegion", dto.getAppRegion(), "投保人所在地区不能为空");
+            required(dto, "appAddress", dto.getAppAddress(), "投保人详细地址不能为空");
+            required(dto, "relation", dto.getRelation(), "与投保人关系不能为空");
+            required(dto, "name", dto.getName(), "被保险人姓名不能为空");
+            required(dto, "certType", dto.getCertType(), "被保险人证件类型不能为空");
+            required(dto, "certNo", dto.getCertNo(), "被保险人证件号码不能为空");
+            required(dto, "phone", dto.getPhone(), "被保险人手机号码不能为空");
+            required(dto, "region", dto.getRegion(), "被保险人所在地区不能为空");
+            required(dto, "address", dto.getAddress(), "被保险人详细地址不能为空");
+            validatePhone(dto, "appPhone", dto.getAppPhone(), "投保人手机号码格式错误");
+            validatePhone(dto, "phone", dto.getPhone(), "被保险人手机号码格式错误");
+            validateCertificate(dto, true);
+            validateCertificate(dto, false);
+            validateDateRange(dto, true);
+            validateDateRange(dto, false);
+
+            for (DynamicInsureFieldUtils.Field field : dynamicFields) {
+                String error = DynamicInsureFieldUtils.validateValue(field, dto.getExtraData().get(field.getKey()));
+                if (StringUtils.isNotBlank(error)) dto.getErrors().put("extraData." + field.getKey(), error);
+            }
+            try {
+                applicationFormTemplate.validateFields(dto.getApplicationForm());
+            } catch (Exception e) {
+                dto.getErrors().put("applicationForm", e.getMessage());
+            }
+            dto.setIsValid(dto.getErrors().isEmpty());
+            if (dto.getIsValid()) validCount++; else invalidCount++;
+        }
+
+        private void validateCertificate(SignedBatchInsuredImportDto dto, boolean applicant) {
+            String type = applicant ? dto.getAppCertType() : dto.getCertType();
+            String number = applicant ? dto.getAppCertNo() : dto.getCertNo();
+            if ("0".equals(type) && StringUtils.isNotBlank(number) && !IdcardUtil.isValidCard18(number)) {
+                dto.getErrors().put(applicant ? "appCertNo" : "certNo",
+                    applicant ? "投保人身份证号码格式错误" : "被保险人身份证号码格式错误");
+            }
+        }
+
+        private void validateDateRange(SignedBatchInsuredImportDto dto, boolean applicant) {
+            String start = applicant ? dto.getAppCertStartDate() : dto.getCertStartDate();
+            String end = applicant ? dto.getAppCertEndDate() : dto.getCertEndDate();
+            String prefix = applicant ? "投保人" : "被保险人";
+            String startKey = applicant ? "appCertStartDate" : "certStartDate";
+            String endKey = applicant ? "appCertEndDate" : "certEndDate";
+            required(dto, startKey, start, prefix + "证件生效期不能为空");
+            required(dto, endKey, end, prefix + "证件到期日不能为空");
+            try {
+                Date startDate = DateUtil.parse(start, DATE_PATTERN);
+                Date endDate = DateUtil.parse(end, DATE_PATTERN);
+                if (endDate.before(startDate)) dto.getErrors().put(endKey, prefix + "证件到期日不能早于生效期");
+            } catch (Exception e) {
+                dto.getErrors().put(StringUtils.isBlank(start) ? endKey : startKey, prefix + "证件日期格式应为yyyy-MM-dd");
+            }
+        }
+
+        private void copyApplicantWhenSelf(SignedBatchInsuredImportDto dto) {
+            if (!"0".equals(dto.getRelation())) return;
+            if (StringUtils.isBlank(dto.getName())) dto.setName(dto.getAppName());
+            if (StringUtils.isBlank(dto.getCertType())) dto.setCertType(dto.getAppCertType());
+            if (StringUtils.isBlank(dto.getCertNo())) dto.setCertNo(dto.getAppCertNo());
+            if (StringUtils.isBlank(dto.getCertStartDate())) dto.setCertStartDate(dto.getAppCertStartDate());
+            if (StringUtils.isBlank(dto.getCertEndDate())) dto.setCertEndDate(dto.getAppCertEndDate());
+            if (StringUtils.isBlank(dto.getPhone())) dto.setPhone(dto.getAppPhone());
+            if (StringUtils.isBlank(dto.getRegion())) dto.setRegion(dto.getAppRegion());
+            if (StringUtils.isBlank(dto.getAddress())) dto.setAddress(dto.getAppAddress());
+        }
+
+        private void deriveIdentityValues(SignedBatchInsuredImportDto dto) {
+            if (!"0".equals(dto.getCertType()) || !IdcardUtil.isValidCard18(dto.getCertNo())) return;
+            dto.getApplicationForm().put("insuredBirthday", formatIdCardBirth(dto.getCertNo()));
+            int gender = IdcardUtil.getGenderByIdCard(dto.getCertNo());
+            dto.getApplicationForm().put("insuredGender", gender == 1 ? "男" : "女");
+        }
+
+        private Object normalizeApplicationValue(SignedBatchTemplateDescriptor.ApplicationField field, String raw) {
+            String value = StringUtils.trimToEmpty(raw);
+            if (value.isBlank() || field.options().isEmpty()) return value;
+            for (String option : field.options()) {
+                String code = option.split("-", 2)[0].trim();
+                String label = option.contains("-") ? option.substring(option.indexOf('-') + 1).trim() : option;
+                if (value.equals(option) || value.equals(code) || value.equals(label)) return code;
+            }
+            return value;
+        }
+
+        private String formatIdCardBirth(String certificateNo) {
+            String birth = IdcardUtil.getBirthByIdCard(certificateNo);
+            return birth != null && birth.length() == 8
+                ? birth.substring(0, 4) + "-" + birth.substring(4, 6) + "-" + birth.substring(6)
+                : birth;
+        }
+
+        private void required(SignedBatchInsuredImportDto dto, String key, String value, String message) {
+            if (StringUtils.isBlank(value)) dto.getErrors().put(key, message);
+        }
+
+        private void validatePhone(SignedBatchInsuredImportDto dto, String key, String value, String message) {
+            if (StringUtils.isNotBlank(value) && !PHONE.matcher(value).matches()) dto.getErrors().put(key, message);
+        }
+
+        private String normalizeDictValue(String dictType, String value) {
+            if (StringUtils.isBlank(value)) return value;
+            String trimmed = value.trim();
+            String code = trimmed.split("-", 2)[0].trim().split(" ")[0].trim();
+            Map<String, String> dict = Optional.ofNullable(dictService.getAllDictByDictType(dictType))
+                .orElseGet(Collections::emptyMap);
+            if (dict.containsKey(code)) return code;
+            for (Map.Entry<String, String> entry : dict.entrySet()) {
+                if (trimmed.equals(entry.getValue())) return entry.getKey();
+            }
+            return code;
+        }
+
+        private boolean isEmptyRow(Map<Integer, String> row) {
+            return row == null || row.values().stream().allMatch(StringUtils::isBlank);
+        }
+
+        private String cell(Map<Integer, String> row, int index) {
+            return StringUtils.trimToEmpty(row.get(index));
+        }
+
+        public List<SignedBatchInsuredImportDto> getResultList() { return resultList; }
+        public int getValidCount() { return validCount; }
+        public int getInvalidCount() { return invalidCount; }
+    }
+
     private static class BatchTemplateDropDownHandler implements SheetWriteHandler {
-        private static final int FIRST_ROW = 1;
         private static final int LAST_ROW = 1000;
         private final Map<Integer, List<String>> dropDownOptions;
+        private final int firstRow;
+        private final Map<String, String> metadata;
         private int hiddenSheetIndex;
 
-        BatchTemplateDropDownHandler(Map<Integer, List<String>> dropDownOptions) {
+        BatchTemplateDropDownHandler(Map<Integer, List<String>> dropDownOptions, int firstRow, Map<String, String> metadata) {
             this.dropDownOptions = dropDownOptions == null ? Collections.emptyMap() : dropDownOptions;
+            this.firstRow = firstRow;
+            this.metadata = metadata;
         }
 
         @Override
         public void afterSheetCreate(WriteWorkbookHolder writeWorkbookHolder, WriteSheetHolder writeSheetHolder) {
-            if (dropDownOptions.isEmpty()) {
-                return;
-            }
             Sheet sheet = writeSheetHolder.getSheet();
             Workbook workbook = writeWorkbookHolder.getWorkbook();
+            writeMetadata(workbook);
+            if (dropDownOptions.isEmpty()) return;
             DataValidationHelper helper = sheet.getDataValidationHelper();
             dropDownOptions.forEach((colIndex, options) -> addDropDown(workbook, sheet, helper, colIndex, options));
         }
@@ -418,7 +797,7 @@ public class BatchInsuranceController {
             } else {
                 constraint = helper.createExplicitListConstraint(options.toArray(new String[0]));
             }
-            CellRangeAddressList addressList = new CellRangeAddressList(FIRST_ROW, LAST_ROW, colIndex, colIndex);
+            CellRangeAddressList addressList = new CellRangeAddressList(firstRow, LAST_ROW, colIndex, colIndex);
             DataValidation validation = helper.createValidation(constraint, addressList);
             if (validation instanceof XSSFDataValidation) {
                 validation.setSuppressDropDownArrow(true);
@@ -429,6 +808,18 @@ public class BatchInsuranceController {
                 validation.setShowPromptBox(true);
             }
             sheet.addValidationData(validation);
+        }
+
+        private void writeMetadata(Workbook workbook) {
+            if (metadata == null || metadata.isEmpty()) return;
+            Sheet sheet = workbook.createSheet(SignedBatchTemplateDescriptor.META_SHEET);
+            int rowIndex = 0;
+            for (Map.Entry<String, String> entry : metadata.entrySet()) {
+                Row row = sheet.createRow(rowIndex++);
+                row.createCell(0).setCellValue(entry.getKey());
+                row.createCell(1).setCellValue(entry.getValue());
+            }
+            workbook.setSheetHidden(workbook.getSheetIndex(sheet), true);
         }
 
         private String writeOptionsToHiddenSheet(Workbook workbook, List<String> options, int colIndex) {

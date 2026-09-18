@@ -1,9 +1,13 @@
 package org.dromara.insurance.service;
 
+import cn.idev.excel.ExcelWriter;
+import cn.idev.excel.FastExcel;
+import cn.idev.excel.write.metadata.WriteSheet;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -14,17 +18,22 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.insurance.config.ApplicationFormExportProperties;
+import org.dromara.insurance.domain.InsuranceApplyRecord;
 import org.dromara.insurance.domain.InsuranceApplicationExportTask;
+import org.dromara.insurance.domain.InsurancePolicy;
 import org.dromara.insurance.domain.bo.InsuranceApplicationExportRequest;
 import org.dromara.insurance.domain.bo.InsuranceApplyRecordBo;
 import org.dromara.insurance.domain.vo.InsuranceApplicationExportTaskVo;
 import org.dromara.insurance.domain.vo.InsuranceApplyRecordVo;
 import org.dromara.insurance.mapper.InsuranceApplicationExportTaskMapper;
+import org.dromara.insurance.mapper.InsuranceApplyRecordMapper;
+import org.dromara.insurance.mapper.InsurancePolicyMapper;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
@@ -51,8 +61,17 @@ public class InsuranceApplicationExportService {
     private static final String PLATFORM_TENANT = TenantConstants.DEFAULT_TENANT_ID;
     private static final long MANIFEST_RESERVE_BYTES = 1024L * 1024;
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final List<String> INFORMATION_HEADERS = List.of(
+        "序号", "订单号", "保单号", "产品名称", "起保日期",
+        "投保人姓名", "投保人证件类型", "投保人证件号", "投保人证件生效期", "投保人证件到期日", "投保人手机号", "投保人地址",
+        "与投保人关系", "被保人姓名", "被保人证件类型", "被保人证件号", "被保人证件生效期", "被保人证件到期日", "被保人手机号", "被保人地址"
+    );
 
     private final InsuranceApplicationExportTaskMapper taskMapper;
+    private final InsuranceApplyRecordMapper orderMapper;
+    private final InsurancePolicyMapper policyMapper;
     private final IInsuranceProxyOrderService proxyOrderService;
     private final InsuranceApplicationFormService applicationFormService;
     private final ApplicationFormStorage storage;
@@ -62,6 +81,8 @@ public class InsuranceApplicationExportService {
     private final TaskExecutor executor;
 
     public InsuranceApplicationExportService(InsuranceApplicationExportTaskMapper taskMapper,
+                                             InsuranceApplyRecordMapper orderMapper,
+                                             InsurancePolicyMapper policyMapper,
                                              IInsuranceProxyOrderService proxyOrderService,
                                              InsuranceApplicationFormService applicationFormService,
                                              ApplicationFormStorage storage,
@@ -70,6 +91,8 @@ public class InsuranceApplicationExportService {
                                              ScheduledExecutorService scheduledExecutorService,
                                              @Qualifier("applicationFormExportExecutor") TaskExecutor executor) {
         this.taskMapper = taskMapper;
+        this.orderMapper = orderMapper;
+        this.policyMapper = policyMapper;
         this.proxyOrderService = proxyOrderService;
         this.applicationFormService = applicationFormService;
         this.storage = storage;
@@ -157,13 +180,73 @@ public class InsuranceApplicationExportService {
     }
 
     private List<Long> resolveTargetIds(InsuranceApplicationExportRequest request) {
+        List<Long> targetIds;
         if ("SELECTED".equals(request.getScope())) {
             if (request.getOrderIds() == null) return List.of();
-            return request.getOrderIds().stream().filter(Objects::nonNull).distinct().toList();
+            targetIds = request.getOrderIds().stream().filter(Objects::nonNull).distinct().toList();
+        } else {
+            InsuranceApplyRecordBo query = Optional.ofNullable(request.getQuery()).orElseGet(InsuranceApplyRecordBo::new);
+            targetIds = ignore(() -> proxyOrderService.queryList(query)).stream()
+                .map(InsuranceApplyRecordVo::getId).filter(Objects::nonNull).distinct().toList();
         }
-        InsuranceApplyRecordBo query = Optional.ofNullable(request.getQuery()).orElseGet(InsuranceApplyRecordBo::new);
-        return ignore(() -> proxyOrderService.queryList(query)).stream()
-            .map(InsuranceApplyRecordVo::getId).filter(Objects::nonNull).distinct().toList();
+        return expandBatchMainIds(targetIds);
+    }
+
+    private List<Long> expandBatchMainIds(List<Long> targetIds) {
+        if (targetIds.isEmpty()) return List.of();
+        List<InsuranceApplyRecord> selected = ignore(() -> orderMapper.selectList(
+            Wrappers.<InsuranceApplyRecord>lambdaQuery()
+                .in(InsuranceApplyRecord::getId, targetIds)
+                .eq(InsuranceApplyRecord::getInsureMode, 1)
+                .select(InsuranceApplyRecord::getId, InsuranceApplyRecord::getTenantId,
+                    InsuranceApplyRecord::getOrderNo, InsuranceApplyRecord::getIsBatch)));
+        Map<Long, InsuranceApplyRecord> selectedById = new HashMap<>();
+        selected.forEach(order -> selectedById.put(order.getId(), order));
+
+        List<InsuranceApplyRecord> batchMains = selected.stream()
+            .filter(order -> Objects.equals(order.getIsBatch(), 1))
+            .toList();
+        Map<String, List<Long>> childIdsByBatch = new HashMap<>();
+        if (!batchMains.isEmpty()) {
+            List<String> tenantIds = batchMains.stream().map(InsuranceApplyRecord::getTenantId)
+                .filter(Objects::nonNull).distinct().toList();
+            List<String> batchOrderNos = batchMains.stream().map(InsuranceApplyRecord::getOrderNo)
+                .filter(Objects::nonNull).distinct().toList();
+            if (!tenantIds.isEmpty() && !batchOrderNos.isEmpty()) {
+                List<InsuranceApplyRecord> children = ignore(() -> orderMapper.selectList(
+                    Wrappers.<InsuranceApplyRecord>lambdaQuery()
+                        .in(InsuranceApplyRecord::getTenantId, tenantIds)
+                        .in(InsuranceApplyRecord::getBatchOrderNo, batchOrderNos)
+                        .eq(InsuranceApplyRecord::getIsBatch, 2)
+                        .eq(InsuranceApplyRecord::getInsureMode, 1)
+                        .orderByAsc(InsuranceApplyRecord::getId)
+                        .select(InsuranceApplyRecord::getId, InsuranceApplyRecord::getTenantId,
+                            InsuranceApplyRecord::getBatchOrderNo)));
+                for (InsuranceApplyRecord child : children) {
+                    childIdsByBatch.computeIfAbsent(platformKey(child.getTenantId(), child.getBatchOrderNo()),
+                        ignored -> new ArrayList<>()).add(child.getId());
+                }
+            }
+        }
+
+        LinkedHashSet<Long> expanded = new LinkedHashSet<>();
+        for (Long targetId : targetIds) {
+            InsuranceApplyRecord order = selectedById.get(targetId);
+            if (order != null && Objects.equals(order.getIsBatch(), 1)) {
+                List<Long> childIds = childIdsByBatch.getOrDefault(
+                    platformKey(order.getTenantId(), order.getOrderNo()), List.of());
+                if (!childIds.isEmpty()) {
+                    expanded.addAll(childIds);
+                    continue;
+                }
+            }
+            expanded.add(targetId);
+        }
+        return List.copyOf(expanded);
+    }
+
+    private String platformKey(String tenantId, String orderNo) {
+        return tenantId + "\u0000" + orderNo;
     }
 
     private void submit(Long taskId) {
@@ -184,6 +267,9 @@ public class InsuranceApplicationExportService {
             InsuranceApplicationExportTask task = task(taskId);
             List<Long> ids = decodeIds(task.getTargetIdsJson());
             List<ExportItem> results = new ArrayList<>(ids.size());
+            List<LinkedHashMap<String, Object>> informationRows = new ArrayList<>();
+            Map<String, LinkedHashMap<String, String>> applicationFieldCache = new HashMap<>();
+            Set<String> zipEntryNames = new HashSet<>();
             zipFile = Files.createTempFile("application-form-export-" + taskId + "-", ".zip");
             long sourceBytes = 0;
             boolean capacityReached = false;
@@ -211,17 +297,31 @@ public class InsuranceApplicationExportService {
                             results.add(ExportItem.skipped(index + 1, order, formStatus, statusReason(formStatus)));
                             continue;
                         }
-                        byte[] pdf = applicationFormService.platformPdf(orderId).bytes();
+                        InsuranceApplicationFormService.PlatformArchive archive = applicationFormService.platformArchive(orderId);
+                        byte[] pdf = archive.bytes();
                         if (sourceBytes + pdf.length + MANIFEST_RESERVE_BYTES > properties.getMaxBytes()) {
                             capacityReached = true;
                             results.add(ExportItem.skipped(index + 1, order, formStatus, "达到单任务容量上限"));
                             continue;
                         }
-                        String pdfName = "投保单/" + safePart(order.getTenantId()) + "_" + safePart(order.getOrderNo()) + "_" + orderId + "_投保单.pdf";
+                        String policyNo = findPolicyNo(order);
+                        String applicantName = firstNotBlank(
+                            Objects.toString(archive.snapshot().get("applicantName"), ""),
+                            archive.applicant() == null ? null : archive.applicant().getApplicantName(),
+                            order.getCustomerName());
+                        String insuredName = firstNotBlank(
+                            Objects.toString(archive.snapshot().get("insuredName"), ""),
+                            archive.insured() == null ? null : archive.insured().getInsuredName(),
+                            order.getCustomerName());
+                        String number = firstNotBlank(policyNo, order.getOrderNo());
+                        String pdfName = uniqueZipEntry("投保单/" + applicationPdfName(number, applicantName, insuredName), zipEntryNames);
+                        LinkedHashMap<String, Object> informationRow = buildInformationRow(
+                            informationRows.size() + 1, order, policyNo, archive, applicationFieldCache);
                         zip.putNextEntry(new ZipEntry(pdfName));
                         zip.write(pdf);
                         zip.closeEntry();
                         sourceBytes += pdf.length;
+                        informationRows.add(informationRow);
                         results.add(ExportItem.success(index + 1, order, formStatus, pdfName));
                     } catch (ServiceException e) {
                         results.add(ExportItem.skipped(index + 1, order, safeMessage(e)));
@@ -230,8 +330,16 @@ public class InsuranceApplicationExportService {
                         results.add(ExportItem.skipped(index + 1, order, "文件读取失败"));
                     }
                 }
+                byte[] workbook = buildInformationWorkbook(informationRows);
+                byte[] manifest = buildManifest(results);
+                if (sourceBytes + workbook.length + manifest.length > properties.getMaxBytes()) {
+                    throw new ServiceException("投保单批量导出文件超过1GB限制");
+                }
+                zip.putNextEntry(new ZipEntry("投保信息表.xlsx"));
+                zip.write(workbook);
+                zip.closeEntry();
                 zip.putNextEntry(new ZipEntry("导出结果清单.txt"));
-                zip.write(buildManifest(results));
+                zip.write(manifest);
                 zip.closeEntry();
             }
             long zipSize = Files.size(zipFile);
@@ -412,6 +520,168 @@ public class InsuranceApplicationExportService {
         vo.setCanDownload(List.of(SUCCESS, PARTIAL).contains(task.getStatus()) && task.getZipKey() != null
             && task.getExpiresAt() != null && task.getExpiresAt().after(new Date()));
         return vo;
+    }
+
+    private String findPolicyNo(InsuranceApplyRecordVo order) {
+        InsurancePolicy policy = ignore(() -> policyMapper.selectOne(Wrappers.<InsurancePolicy>lambdaQuery()
+            .eq(InsurancePolicy::getTenantId, order.getTenantId())
+            .eq(InsurancePolicy::getOrderNo, order.getOrderNo())
+            .isNotNull(InsurancePolicy::getPolicyNo)
+            .ne(InsurancePolicy::getPolicyNo, "")
+            .orderByDesc(InsurancePolicy::getId)
+            .select(InsurancePolicy::getPolicyNo)
+            .last("LIMIT 1")));
+        return policy == null ? "" : Objects.toString(policy.getPolicyNo(), "");
+    }
+
+    private LinkedHashMap<String, Object> buildInformationRow(
+        int index, InsuranceApplyRecordVo order, String policyNo,
+        InsuranceApplicationFormService.PlatformArchive archive,
+        Map<String, LinkedHashMap<String, String>> applicationFieldCache) {
+        LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+        var applicant = archive.applicant();
+        var insured = archive.insured();
+        Map<String, Object> snapshot = archive.snapshot();
+        row.put("序号", index);
+        row.put("订单号", order.getOrderNo());
+        row.put("保单号", policyNo);
+        row.put("产品名称", order.getProductName());
+        row.put("起保日期", formatDate(order.getPolicyStartDate()));
+        row.put("投保人姓名", firstNotBlank(Objects.toString(snapshot.get("applicantName"), ""),
+            applicant == null ? null : applicant.getApplicantName()));
+        row.put("投保人证件类型", firstNotBlank(Objects.toString(snapshot.get("applicantCertTypeLabel"), ""),
+            applicant == null ? null : applicant.getApplicantCertType()));
+        row.put("投保人证件号", firstNotBlank(Objects.toString(snapshot.get("applicantCertNo"), ""),
+            applicant == null ? null : applicant.getApplicantCertNo()));
+        row.put("投保人证件生效期", applicant == null ? "" : applicant.getCertStartDate());
+        row.put("投保人证件到期日", applicant == null ? "" : applicant.getCertEndDate());
+        row.put("投保人手机号", firstNotBlank(Objects.toString(snapshot.get("applicantPhone"), ""),
+            applicant == null ? null : applicant.getApplicantPhone()));
+        row.put("投保人地址", firstNotBlank(Objects.toString(snapshot.get("applicantAddress"), ""),
+            applicant == null ? null : applicant.getApplicantAddress()));
+        row.put("与投保人关系", firstNotBlank(Objects.toString(snapshot.get("relationLabel"), ""),
+            insured == null ? null : insured.getRelation()));
+        row.put("被保人姓名", firstNotBlank(Objects.toString(snapshot.get("insuredName"), ""),
+            insured == null ? null : insured.getInsuredName()));
+        row.put("被保人证件类型", firstNotBlank(Objects.toString(snapshot.get("insuredCertTypeLabel"), ""),
+            insured == null ? null : insured.getInsuredCertType()));
+        row.put("被保人证件号", firstNotBlank(Objects.toString(snapshot.get("insuredCertNo"), ""),
+            insured == null ? null : insured.getInsuredCertNo()));
+        row.put("被保人证件生效期", insured == null ? "" : insured.getCertStartDate());
+        row.put("被保人证件到期日", insured == null ? "" : insured.getCertEndDate());
+        row.put("被保人手机号", firstNotBlank(Objects.toString(snapshot.get("insuredPhone"), ""),
+            insured == null ? null : insured.getInsuredPhone()));
+        row.put("被保人地址", firstNotBlank(Objects.toString(snapshot.get("insuredAddress"), ""),
+            insured == null ? null : insured.getInsuredAddress()));
+
+        Map<String, Object> extras = decodeExtras(order.getInsureExtraData());
+        Map<String, Object> applicationForm = mapValue(extras.get("applicationForm"));
+        LinkedHashMap<String, String> fieldLabels = applicationFieldLabels(archive, applicationFieldCache);
+        LinkedHashSet<String> applicationKeys = new LinkedHashSet<>(fieldLabels.keySet());
+        applicationKeys.addAll(applicationForm.keySet());
+        for (String key : applicationKeys) {
+            String label = fieldLabels.getOrDefault(key, key);
+            Object value = snapshot.containsKey(key) ? snapshot.get(key) : applicationForm.get(key);
+            row.put("投保单-" + label + "(" + key + ")", excelValue(value));
+        }
+        for (Map.Entry<String, Object> entry : extras.entrySet()) {
+            if (!"applicationForm".equals(entry.getKey())) {
+                row.put("扩展字段-" + entry.getKey(), excelValue(entry.getValue()));
+            }
+        }
+        return row;
+    }
+
+    private LinkedHashMap<String, String> applicationFieldLabels(
+        InsuranceApplicationFormService.PlatformArchive archive,
+        Map<String, LinkedHashMap<String, String>> cache) {
+        String cacheKey = archive.templateCode() + "\u0000" + archive.templateVersion();
+        return cache.computeIfAbsent(cacheKey, ignored -> {
+            LinkedHashMap<String, String> labels = new LinkedHashMap<>();
+            try {
+                for (JsonNode field : applicationFormService.metadata(archive.templateCode(), archive.templateVersion()).path("fields")) {
+                    String key = field.path("key").asText();
+                    if (!key.isBlank()) labels.put(key, field.path("label").asText(key));
+                }
+            } catch (RuntimeException e) {
+                log.warn("读取归档投保单字段名称失败 templateCode={} templateVersion={} errorType={}",
+                    archive.templateCode(), archive.templateVersion(), e.getClass().getSimpleName());
+            }
+            return labels;
+        });
+    }
+
+    private Map<String, Object> decodeExtras(String value) {
+        if (value == null || value.isBlank()) return Map.of();
+        try {
+            return json.readValue(value, new TypeReference<LinkedHashMap<String, Object>>() { });
+        } catch (Exception e) {
+            log.warn("读取投保扩展信息失败 errorType={}", e.getClass().getSimpleName());
+            return Map.of();
+        }
+    }
+
+    private static Map<String, Object> mapValue(Object value) {
+        if (!(value instanceof Map<?, ?> map)) return Map.of();
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        map.forEach((key, item) -> result.put(Objects.toString(key, ""), item));
+        return result;
+    }
+
+    private Object excelValue(Object value) {
+        if (value == null) return "";
+        if (value instanceof Map<?, ?> || value instanceof Collection<?> || value.getClass().isArray()) {
+            try {
+                return json.writeValueAsString(value);
+            } catch (Exception e) {
+                return Objects.toString(value, "");
+            }
+        }
+        return value;
+    }
+
+    static byte[] buildInformationWorkbook(List<LinkedHashMap<String, Object>> rows) {
+        LinkedHashSet<String> headers = new LinkedHashSet<>(INFORMATION_HEADERS);
+        rows.forEach(row -> headers.addAll(row.keySet()));
+        List<List<String>> head = headers.stream().map(List::of).toList();
+        List<List<Object>> data = new ArrayList<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            data.add(headers.stream().map(key -> row.getOrDefault(key, "")).toList());
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ExcelWriter writer = FastExcel.write(output).autoCloseStream(false).build()) {
+            WriteSheet sheet = FastExcel.writerSheet("投保信息").head(head).build();
+            writer.write(data, sheet);
+        }
+        return output.toByteArray();
+    }
+
+    static String applicationPdfName(String number, String applicantName, String insuredName) {
+        return safePart(number) + "_" + safePart(applicantName) + "_" + safePart(insuredName) + "_投保单.pdf";
+    }
+
+    private static String uniqueZipEntry(String path, Set<String> used) {
+        if (used.add(path)) return path;
+        int dot = path.lastIndexOf('.');
+        String base = dot < 0 ? path : path.substring(0, dot);
+        String extension = dot < 0 ? "" : path.substring(dot);
+        int number = 2;
+        String candidate;
+        do {
+            candidate = base + "_(" + number++ + ")" + extension;
+        } while (!used.add(candidate));
+        return candidate;
+    }
+
+    private static String firstNotBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return "";
+    }
+
+    private static String formatDate(Date value) {
+        return value == null ? "" : DATE.format(value.toInstant().atZone(BUSINESS_ZONE));
     }
 
     static byte[] buildManifest(List<ExportItem> results) {

@@ -80,6 +80,23 @@ public class InsuranceApplicationFormService {
             return new PlatformPdf(order.getOrderNo(),readPdf(platformLatest(order)));
         });
     }
+    public PlatformArchive platformArchive(Long orderId){
+        return TenantHelper.ignore(()->{
+            InsuranceApplyRecord order=platformOrder(orderId);
+            if(!guard.required(order))throw new ServiceException("该订单未启用签字投保单");
+            InsuranceApplicationDocument doc=platformLatest(order);
+            byte[] pdf=readPdf(doc);
+            InsuranceOrderApplicant applicant=applicants.selectOne(new LambdaQueryWrapper<InsuranceOrderApplicant>()
+                .eq(InsuranceOrderApplicant::getTenantId,order.getTenantId())
+                .eq(InsuranceOrderApplicant::getOrderNo,order.getOrderNo()));
+            InsuranceOrderInsured insured=insureds.selectOne(new LambdaQueryWrapper<InsuranceOrderInsured>()
+                .eq(InsuranceOrderInsured::getTenantId,order.getTenantId())
+                .eq(InsuranceOrderInsured::getOrderNo,order.getOrderNo())
+                .orderByAsc(InsuranceOrderInsured::getId).last("LIMIT 1"));
+            return new PlatformArchive(order.getOrderNo(),doc.getTemplateCode(),doc.getTemplateVersion(),
+                decode(doc.getSnapshotJson()),applicant,insured,pdf);
+        });
+    }
     private InsuranceApplyRecord platformOrder(Long orderId){
         InsuranceApplyRecord order=orders.selectOne(new LambdaQueryWrapper<InsuranceApplyRecord>()
             .eq(InsuranceApplyRecord::getId,orderId).eq(InsuranceApplyRecord::getInsureMode,1));
@@ -93,6 +110,9 @@ public class InsuranceApplicationFormService {
             .orderByDesc(InsuranceApplicationDocument::getId).last("LIMIT 1"));
     }
     public record PlatformPdf(String orderNo,byte[] bytes){}
+    public record PlatformArchive(String orderNo,String templateCode,String templateVersion,
+                                  Map<String,Object> snapshot,InsuranceOrderApplicant applicant,
+                                  InsuranceOrderInsured insured,byte[] bytes){}
     public Map<String,Object> prepare(String orderNo){
         InsuranceApplicationDocument doc=tx(()->{
             InsuranceApplyRecord order=guard.lock(orderNo);guard.assertOwner(order);
@@ -171,9 +191,43 @@ public class InsuranceApplicationFormService {
         });
         return generate(orderNo,doc.getId());
     }
-    public Map<String,Object> generate(String orderNo,Long id){
+    public Map<String,Object> signPublic(String orderNo,Long id,List<String> slots,Map<String,byte[]> images,String ip,String ua)throws IOException{
+        if(slots==null||slots.isEmpty())throw new ServiceException("签署栏位不能为空");
+        Map<String,Object> incoming=new LinkedHashMap<>();
+        for(String key:slots){
+            if(!List.of("special","applicant","insured").contains(key))throw new ServiceException("签署栏位无效");
+            byte[] bytes=images.get(key);if(bytes==null)throw new ServiceException("请完成本页全部签字");
+            incoming.put(key,Base64.getEncoder().encodeToString(normalizeSignature(bytes)));
+        }
+        String storageConfig=storage.config();
         InsuranceApplicationDocument doc=tx(()->{
-            var order=guard.lock(orderNo);guard.assertOwner(order);
+            var order=guard.lock(orderNo);guard.assertEditable(order);
+            var current=current(orderNo,id);
+            if(!Objects.equals(text(decode(current.getSnapshotJson()),"sourceHash"),guard.sourceHash(order)))
+                throw new ServiceException("投保资料已变化，请联系经办人重新发起签署");
+            if(!List.of("DRAFT","PARTIAL").contains(current.getStatus())) {
+                if("READY".equals(current.getStatus()))return current;
+                throw new ServiceException("投保单当前状态不能签署");
+            }
+            Map<String,Object> payload=current.getSignatureJson()==null?new LinkedHashMap<>():decode(current.getSignatureJson());
+            payload.putAll(incoming);current.setSignatureJson(encode(payload));current.setRequestIp(ip);
+            current.setUserAgent(ua==null?"":ua.substring(0,Math.min(ua.length(),500)));current.setStorageConfig(storageConfig);
+            boolean complete=List.of("special","applicant","insured").stream().allMatch(payload::containsKey);
+            current.setStatus(complete?"FAILED":"PARTIAL");
+            current.setFailureReason(complete?"等待生成":null);
+            if(complete)current.setSignedTime(new Date());
+            documents.updateById(current);return current;
+        });
+        if("READY".equals(doc.getStatus()))return Map.of("status","READY","documentId",id.toString());
+        if("PARTIAL".equals(doc.getStatus()))return Map.of("status","PARTIAL","documentId",id.toString());
+        return generateInternal(orderNo,doc.getId(),false);
+    }
+    public Map<String,Object> generate(String orderNo,Long id){
+        return generateInternal(orderNo,id,true);
+    }
+    private Map<String,Object> generateInternal(String orderNo,Long id,boolean requireOwner){
+        InsuranceApplicationDocument doc=tx(()->{
+            var order=guard.lock(orderNo);if(requireOwner)guard.assertOwner(order);
             var current=current(orderNo,id);
             if("READY".equals(current.getStatus()))return current;
             guard.assertEditable(order);

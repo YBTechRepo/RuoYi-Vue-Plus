@@ -47,3 +47,7 @@ nbdist/
 !*/build/*.xml
 
 .flattened-pom.xml
+
+script/
+AGENTS.md
+GEMINI.md

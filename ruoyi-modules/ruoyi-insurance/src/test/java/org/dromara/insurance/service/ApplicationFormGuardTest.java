@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 @Tag("dev")
 class ApplicationFormGuardTest {
     private InsuranceApplicationDocumentMapper documents;
+    private InsuranceApplyRecordMapper orders;
     private InsuranceOrderApplicantMapper applicants;
     private InsuranceOrderInsuredMapper insureds;
     private ApplicationFormGuard guard;
@@ -36,12 +37,14 @@ class ApplicationFormGuardTest {
     @BeforeEach
     void setup() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), "test"), InsuranceApplicationDocument.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), "test"), InsuranceApplyRecord.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), "test"), InsuranceOrderApplicant.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), "test"), InsuranceOrderInsured.class);
         documents = mock(InsuranceApplicationDocumentMapper.class);
+        orders = mock(InsuranceApplyRecordMapper.class);
         applicants = mock(InsuranceOrderApplicantMapper.class);
         insureds = mock(InsuranceOrderInsuredMapper.class);
-        guard = spy(new ApplicationFormGuard(mock(InsuranceProductConfigMapper.class), mock(InsuranceApplyRecordMapper.class), documents, applicants, insureds, json));
+        guard = spy(new ApplicationFormGuard(mock(InsuranceProductConfigMapper.class), orders, documents, applicants, insureds, json));
         order = new InsuranceApplyRecord();
         order.setApplicationFormRequired(true);
         order.setOrderNo("ORDER-001");
@@ -86,6 +89,23 @@ class ApplicationFormGuardTest {
         assertThrows(ServiceException.class, () -> guard.assertBatchAllowed(1L));
         product.setApplicationFormRequired(false);
         assertDoesNotThrow(() -> guard.assertBatchAllowed(1L));
+    }
+
+    @Test
+    void signedBatchMainDoesNotNeedOwnDocumentButChildKeepsSnapshotRequirement() {
+        order.setIsBatch(1);
+        order.setApplicationFormRequired(false);
+        var product = new InsuranceProductConfig();
+        product.setApplicationFormRequired(true);
+        doReturn(product).when(guard).product(1L);
+        assertFalse(guard.required(order));
+        assertDoesNotThrow(() -> guard.assertReady(order));
+
+        order.setIsBatch(2);
+        order.setApplicationFormRequired(true);
+        product.setApplicationFormRequired(false);
+        assertTrue(guard.required(order));
+        assertThrows(ServiceException.class, () -> guard.assertReady(order));
     }
 
     @Test
@@ -181,5 +201,49 @@ class ApplicationFormGuardTest {
 
         assertEquals("READY", tenantA.getApplicationFormStatus());
         assertEquals("FAILED", tenantB.getApplicationFormStatus());
+    }
+
+    @Test
+    void platformEnrichmentAggregatesReadyChildDocumentsForBatchMain() {
+        var main = new InsuranceApplyRecordVo();
+        main.setTenantId("tenant-a");
+        main.setOrderNo("BATCH-001");
+        main.setIsBatch(1);
+        main.setStatus(0);
+        main.setApplicationFormRequired(false);
+
+        var child1 = batchChild(11L, "BATCH-001-0001");
+        var child2 = batchChild(12L, "BATCH-001-0002");
+        when(orders.selectList(any())).thenReturn(List.of(child1, child2));
+
+        var ready1 = readyDocument(21L, "BATCH-001-0001");
+        var ready2 = readyDocument(22L, "BATCH-001-0002");
+        when(documents.selectList(any())).thenReturn(List.of(ready1, ready2));
+
+        guard.enrichPlatform(List.of(main));
+
+        assertTrue(main.getApplicationFormRequired());
+        assertEquals("READY", main.getApplicationFormStatus());
+    }
+
+    private InsuranceApplyRecord batchChild(Long id, String orderNo) {
+        var child = new InsuranceApplyRecord();
+        child.setId(id);
+        child.setTenantId("tenant-a");
+        child.setOrderNo(orderNo);
+        child.setBatchOrderNo("BATCH-001");
+        child.setIsBatch(2);
+        child.setStatus(0);
+        child.setApplicationFormRequired(true);
+        return child;
+    }
+
+    private InsuranceApplicationDocument readyDocument(Long id, String orderNo) {
+        var document = new InsuranceApplicationDocument();
+        document.setId(id);
+        document.setTenantId("tenant-a");
+        document.setOrderNo(orderNo);
+        document.setStatus("READY");
+        return document;
     }
 }

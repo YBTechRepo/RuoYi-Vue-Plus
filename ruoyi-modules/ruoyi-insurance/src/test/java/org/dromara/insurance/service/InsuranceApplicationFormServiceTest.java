@@ -159,6 +159,39 @@ class InsuranceApplicationFormServiceTest {
     }
 
     @Test
+    void platformArchiveReturnsThePdfSnapshotAndSavedPeopleFromTheSameTenant() {
+        byte[] pdf = "archived-pdf".getBytes();
+        var order = new InsuranceApplyRecord();
+        order.setId(1L);
+        order.setTenantId("tenant-test");
+        order.setOrderNo("ORDER-001");
+        order.setInsureMode(1);
+        when(orders.selectOne(any())).thenReturn(order);
+        when(guard.required(order)).thenReturn(true);
+
+        document.setStatus("READY");
+        document.setStorageConfig("private-test");
+        document.setPdfKey("insurance-applications/file.pdf");
+        document.setPdfHash(ApplicationFormTemplate.hash(pdf));
+        document.setSnapshotJson("{\"applicantName\":\"张三\",\"insuredName\":\"李四\"}");
+        when(documents.selectOne(any())).thenReturn(document);
+        when(storage.get("private-test", "insurance-applications/file.pdf")).thenReturn(pdf);
+        var applicant = new InsuranceOrderApplicant();
+        applicant.setApplicantName("张三");
+        var insured = new InsuranceOrderInsured();
+        insured.setInsuredName("李四");
+        when(applicants.selectOne(any())).thenReturn(applicant);
+        when(insureds.selectOne(any())).thenReturn(insured);
+
+        var archive = service.platformArchive(1L);
+
+        assertArrayEquals(pdf, archive.bytes());
+        assertEquals("张三", archive.snapshot().get("applicantName"));
+        assertEquals("张三", archive.applicant().getApplicantName());
+        assertEquals("李四", archive.insured().getInsuredName());
+    }
+
+    @Test
     void derivesMinorIdentityAndSignerFromSavedPeopleAndIgnoresLegacyInputs() throws Exception {
         Map<String,Object> snapshot = snapshot("0", "110101201601010015", "1999-12-31", "女");
         assertEquals("2016-01-01", snapshot.get("insuredBirthday"));

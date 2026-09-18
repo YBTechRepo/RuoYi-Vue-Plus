@@ -58,7 +58,26 @@ public class ApplicationFormGuard {
         if(rows.isEmpty())return;
         var tenantIds=rows.stream().map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getTenantId)
             .filter(Objects::nonNull).distinct().toList();
-        var nos=rows.stream().map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getOrderNo)
+        var batchNos=rows.stream().filter(row->Objects.equals(row.getIsBatch(),1))
+            .map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getOrderNo)
+            .filter(Objects::nonNull).distinct().toList();
+        java.util.List<InsuranceApplyRecord> children=java.util.List.of();
+        if(!tenantIds.isEmpty()&&!batchNos.isEmpty()) {
+            children=orders.selectList(new LambdaQueryWrapper<InsuranceApplyRecord>()
+                .in(InsuranceApplyRecord::getTenantId,tenantIds)
+                .in(InsuranceApplyRecord::getBatchOrderNo,batchNos)
+                .eq(InsuranceApplyRecord::getIsBatch,2)
+                .select(InsuranceApplyRecord::getId,InsuranceApplyRecord::getTenantId,
+                    InsuranceApplyRecord::getOrderNo,InsuranceApplyRecord::getBatchOrderNo,
+                    InsuranceApplyRecord::getProductId,InsuranceApplyRecord::getStatus,
+                    InsuranceApplyRecord::getApplicationFormRequired));
+        }
+        java.util.Map<String,java.util.List<InsuranceApplyRecord>> childrenByBatch=new java.util.HashMap<>();
+        for(var child:children)childrenByBatch.computeIfAbsent(platformKey(child.getTenantId(),child.getBatchOrderNo()),
+            ignored->new java.util.ArrayList<>()).add(child);
+        var nos=java.util.stream.Stream.concat(
+                rows.stream().map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getOrderNo),
+                children.stream().map(InsuranceApplyRecord::getOrderNo))
             .filter(Objects::nonNull).distinct().toList();
         java.util.Map<String,String> statuses=new java.util.HashMap<>();
         if(!tenantIds.isEmpty()&&!nos.isEmpty()) {
@@ -70,7 +89,9 @@ public class ApplicationFormGuard {
                 .orderByDesc(InsuranceApplicationDocument::getId));
             for(var doc:docs)statuses.putIfAbsent(platformKey(doc.getTenantId(),doc.getOrderNo()),doc.getStatus());
         }
-        var ids=rows.stream().map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getProductId)
+        var ids=java.util.stream.Stream.concat(
+                rows.stream().map(org.dromara.insurance.domain.vo.InsuranceApplyRecordVo::getProductId),
+                children.stream().map(InsuranceApplyRecord::getProductId))
             .filter(Objects::nonNull).distinct().toList();
         java.util.Set<Long> enabled=new java.util.HashSet<>();
         if(!ids.isEmpty()) {
@@ -80,10 +101,30 @@ public class ApplicationFormGuard {
             active.forEach(p->enabled.add(p.getId()));
         }
         for(var row:rows) {
+            if(Objects.equals(row.getIsBatch(),1)) {
+                var batchChildren=childrenByBatch.getOrDefault(platformKey(row.getTenantId(),row.getOrderNo()),java.util.List.of());
+                var requiredChildren=batchChildren.stream().filter(child->platformRequired(child.getApplicationFormRequired(),
+                    child.getStatus(),child.getProductId(),enabled)).toList();
+                boolean required=!requiredChildren.isEmpty();
+                row.setApplicationFormRequired(required);
+                if(required)row.setApplicationFormStatus(aggregateBatchStatus(requiredChildren,statuses));
+                continue;
+            }
             boolean required=Boolean.TRUE.equals(row.getApplicationFormRequired()) || (!Objects.equals(row.getStatus(),0)&&enabled.contains(row.getProductId()));
             row.setApplicationFormRequired(required);
             if(required)row.setApplicationFormStatus(statuses.getOrDefault(platformKey(row.getTenantId(),row.getOrderNo()),"MISSING"));
         }
+    }
+    private boolean platformRequired(Boolean snapshot,Integer status,Long productId,java.util.Set<Long> enabled){
+        return Boolean.TRUE.equals(snapshot)||(!Objects.equals(status,0)&&enabled.contains(productId));
+    }
+    private String aggregateBatchStatus(java.util.List<InsuranceApplyRecord> children,java.util.Map<String,String> statuses){
+        var childStatuses=children.stream().map(child->statuses.getOrDefault(
+            platformKey(child.getTenantId(),child.getOrderNo()),"MISSING")).toList();
+        if(childStatuses.stream().allMatch("READY"::equals))return "READY";
+        for(String status:java.util.List.of("FAILED","INVALID","GENERATING","PARTIAL","DRAFT","MISSING"))
+            if(childStatuses.contains(status))return status;
+        return "MISSING";
     }
     private String platformKey(String tenantId,String orderNo){return tenantId+'\u0000'+orderNo;}
     public void assertDirectPersonEditAllowed(String orderNo) {
@@ -97,6 +138,8 @@ public class ApplicationFormGuard {
     }
 
     public boolean required(InsuranceApplyRecord order) {
+        // 签字批次主单只汇总子单，不生成自己的投保单；子单通过快照字段继续锁定为需要签字。
+        if (Objects.equals(order.getIsBatch(), 1)) return false;
         if (Boolean.TRUE.equals(order.getApplicationFormRequired())) return true;
         if (Objects.equals(order.getStatus(), 0)) return false;
         InsuranceProductConfig p = product(order.getProductId());
